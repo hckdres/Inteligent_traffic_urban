@@ -1,2 +1,2 @@
 # Inteligent_traffic_urban
-Project of distrubuited system
+Project of distributed system
