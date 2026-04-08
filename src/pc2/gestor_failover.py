@@ -15,6 +15,8 @@ class GestorFailover:
         self.context = zmq.Context.instance()
 
         self.push_primary = self.context.socket(zmq.PUSH)
+        self.push_primary.setsockopt(zmq.SNDTIMEO, 2000)  # Evitar bloqueo infinito
+        self.push_primary.setsockopt(zmq.LINGER, 0)
         self.push_primary.connect(PRIMARY_PERSIST_ENDPOINT)
 
         self.push_replica = self.context.socket(zmq.PUSH)

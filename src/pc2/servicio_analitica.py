@@ -6,6 +6,10 @@ from typing import Any, Dict, List
 
 import yaml
 import zmq
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+from rich import box
 
 from src.dominio.regla_trafico import ReglaTrafico, seleccionar_mejor_regla
 from src.pc2.control_semaforos import ControlSemaforos
@@ -26,12 +30,13 @@ class ServicioAnalitica:
 
         self.context = zmq.Context.instance()
         self.pull_socket = self.context.socket(zmq.PULL)
-        self.pull_socket.bind(PC2_PULL_ENDPOINT)
+        self.pull_socket.connect(PC2_PULL_ENDPOINT)
 
         self.rep_socket = self.context.socket(zmq.REP)
         self.rep_socket.bind(ANALITICA_COMMAND_ENDPOINT)
 
         self.contextos_por_interseccion: Dict[str, Dict[str, Any]] = {}
+        self.console = Console()
         self.healthcheck = HealthCheckPC3(self.failover.actualizar_estado_primaria)
         self.healthcheck.start()
 
@@ -105,10 +110,20 @@ class ServicioAnalitica:
                 "origen": "ANALITICA",
             }
 
-        print(
-            f"[ANALITICA] decision -> {decision['interseccion']} | "
-            f"estado={decision['estado_circulacion']} | accion={decision['accion']}"
-        )
+        color = "green" if decision["estado_circulacion"] == "NORMAL" else "red" if "CONGESTION" in decision["estado_circulacion"] else "blue"
+        
+        self.console.print(Panel(
+            Text.assemble(
+                ("Intersección: ", "bold"), (decision["interseccion"], "cyan"),
+                ("\nEstado: ", "bold"), (decision["estado_circulacion"], color),
+                ("\nAcción: ", "bold"), (decision["accion"], "bold yellow"),
+                ("\nDuración: ", "bold"), (f"{decision['duracion_verde_segundos']}s", "white")
+            ),
+            title="[bold white]Decisión de Tráfico[/bold white]",
+            border_style=color,
+            box=box.ROUNDED,
+            expand=False
+        ))
         return decision
 
     def procesar_solicitud_directa(self, solicitud: Dict[str, Any]) -> Dict[str, Any]:
