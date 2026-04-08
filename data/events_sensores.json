@@ -1,0 +1,80 @@
+[
+  {
+    "sensor_id": "CAM-A1",
+    "tipo_sensor": "camara",
+    "interseccion": "INT-A1",
+    "volumen": 3,
+    "velocidad_promedio": 42,
+    "timestamp": "2026-04-08T08:00:00"
+  },
+  {
+    "sensor_id": "ESP-A1",
+    "tipo_sensor": "espira_inductiva",
+    "interseccion": "INT-A1",
+    "vehiculos_contados": 10,
+    "intervalo_segundos": 30,
+    "timestamp_inicio": "2026-04-08T08:00:00",
+    "timestamp_fin": "2026-04-08T08:00:30"
+  },
+  {
+    "sensor_id": "GPS-A1",
+    "tipo_sensor": "gps",
+    "interseccion": "INT-A1",
+    "nivel_congestion": "NORMAL",
+    "velocidad_promedio": 40,
+    "densidad": 12,
+    "timestamp": "2026-04-08T08:00:10"
+  },
+  {
+    "sensor_id": "CAM-B2",
+    "tipo_sensor": "camara",
+    "interseccion": "INT-B2",
+    "volumen": 14,
+    "velocidad_promedio": 11,
+    "timestamp": "2026-04-08T08:01:00"
+  },
+  {
+    "sensor_id": "ESP-B2",
+    "tipo_sensor": "espira_inductiva",
+    "interseccion": "INT-B2",
+    "vehiculos_contados": 4,
+    "intervalo_segundos": 30,
+    "timestamp_inicio": "2026-04-08T08:01:00",
+    "timestamp_fin": "2026-04-08T08:01:30"
+  },
+  {
+    "sensor_id": "GPS-B2",
+    "tipo_sensor": "gps",
+    "interseccion": "INT-B2",
+    "nivel_congestion": "ALTA",
+    "velocidad_promedio": 9,
+    "densidad": 38,
+    "timestamp": "2026-04-08T08:01:10"
+  },
+  {
+    "sensor_id": "CAM-C3",
+    "tipo_sensor": "camara",
+    "interseccion": "INT-C3",
+    "volumen": 18,
+    "velocidad_promedio": 8,
+    "timestamp": "2026-04-08T08:02:00"
+  },
+  {
+    "sensor_id": "ESP-C3",
+    "tipo_sensor": "espira_inductiva",
+    "interseccion": "INT-C3",
+    "vehiculos_contados": 7,
+    "intervalo_segundos": 30,
+    "timestamp_inicio": "2026-04-08T08:02:00",
+    "timestamp_fin": "2026-04-08T08:02:30"
+  },
+  {
+    "sensor_id": "GPS-C3",
+    "tipo_sensor": "gps",
+    "interseccion": "INT-C3",
+    "nivel_congestion": "ALTA",
+    "velocidad_promedio": 7,
+    "densidad": 40,
+    "timestamp": "2026-04-08T08:02:10"
+  }
+]

@@ -1,0 +1,95 @@
+reglas:
+  - id: R4_PRIORIZACION_AMBULANCIA
+    nombre: Priorizacion por ambulancia
+    prioridad: 100
+    condiciones:
+      todas:
+        - variable: tipo_evento
+          operador: "=="
+          valor: INDICACION_DIRECTA
+        - variable: accion
+          operador: "=="
+          valor: PRIORIZAR_VIA
+        - variable: motivo
+          operador: "=="
+          valor: AMBULANCIA
+    resultado:
+      estado_circulacion: PRIORIZACION
+      accion: OLA_VERDE
+      duracion_verde_segundos: 35
+
+  - id: R3_CONGESTION_SEVERA
+    nombre: Congestion severa
+    prioridad: 90
+    condiciones:
+      todas:
+        - variable: cola
+          operador: ">="
+          valor: 15
+        - variable: velocidad_promedio
+          operador: "<="
+          valor: 10
+        - variable: densidad
+          operador: ">="
+          valor: 35
+    resultado:
+      estado_circulacion: CONGESTION
+      accion: EXTENDER_VERDE_Y_GENERAR_ALERTA
+      duracion_verde_segundos: 30
+
+  - id: R2_CONGESTION_MODERADA
+    nombre: Congestion moderada
+    prioridad: 80
+    condiciones:
+      alguna:
+        - variable: cola
+          operador: ">="
+          valor: 8
+        - variable: velocidad_promedio
+          operador: "<="
+          valor: 20
+        - variable: densidad
+          operador: ">="
+          valor: 25
+    resultado:
+      estado_circulacion: CONGESTION
+      accion: EXTENDER_VERDE
+      duracion_verde_segundos: 25
+
+  - id: R1_NORMAL
+    nombre: Trafico normal
+    prioridad: 50
+    condiciones:
+      todas:
+        - variable: cola
+          operador: "<"
+          valor: 5
+        - variable: velocidad_promedio
+          operador: ">"
+          valor: 35
+        - variable: densidad
+          operador: "<"
+          valor: 20
+    resultado:
+      estado_circulacion: NORMAL
+      accion: MANTENER_TEMPORIZACION
+      duracion_verde_segundos: 15
+
+  - id: R5_RECUPERACION
+    nombre: Recuperacion a normalidad
+    prioridad: 40
+    condiciones:
+      todas:
+        - variable: cola
+          operador: "<"
+          valor: 5
+        - variable: velocidad_promedio
+          operador: ">"
+          valor: 30
+        - variable: densidad
+          operador: "<"
+          valor: 20
+    resultado:
+      estado_circulacion: NORMAL
+      accion: RESTAURAR_TEMPORIZACION
+      duracion_verde_segundos: 15
