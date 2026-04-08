@@ -9,10 +9,12 @@ import zmq
 
 from src.dominio.regla_trafico import ReglaTrafico, seleccionar_mejor_regla
 from src.pc2.control_semaforos import ControlSemaforos
-from src.pc2.gestor_persistencia import GestorPersistencia
+from src.pc2.gestor_failover import GestorFailover
+from src.pc2.health_check import HealthCheckPC3
 
 
 PC2_PULL_ENDPOINT = "tcp://127.0.0.1:5557"
+ANALITICA_COMMAND_ENDPOINT = "tcp://127.0.0.1:5562"
 
 
 class ServicioAnalitica:
@@ -20,13 +22,18 @@ class ServicioAnalitica:
         self.ruta_reglas = Path(ruta_reglas)
         self.reglas = self._cargar_reglas()
         self.control_semaforos = ControlSemaforos()
-        self.persistencia = GestorPersistencia()
+        self.failover = GestorFailover()
 
         self.context = zmq.Context.instance()
         self.pull_socket = self.context.socket(zmq.PULL)
-        self.pull_socket.connect(PC2_PULL_ENDPOINT)
+        self.pull_socket.bind(PC2_PULL_ENDPOINT)
+
+        self.rep_socket = self.context.socket(zmq.REP)
+        self.rep_socket.bind(ANALITICA_COMMAND_ENDPOINT)
 
         self.contextos_por_interseccion: Dict[str, Dict[str, Any]] = {}
+        self.healthcheck = HealthCheckPC3(self.failover.actualizar_estado_primaria)
+        self.healthcheck.start()
 
     def _cargar_reglas(self) -> List[ReglaTrafico]:
         if not self.ruta_reglas.exists():
@@ -38,40 +45,39 @@ class ServicioAnalitica:
         return [ReglaTrafico.desde_dict(item) for item in data.get("reglas", [])]
 
     def escuchar_eventos(self) -> None:
-        print("[ANALITICA] escuchando eventos desde el broker...")
+        print("[ANALITICA] escuchando eventos y comandos...")
+        poller = zmq.Poller()
+        poller.register(self.pull_socket, zmq.POLLIN)
+        poller.register(self.rep_socket, zmq.POLLIN)
 
         while True:
-            mensaje = self.pull_socket.recv_string()
-            topico, payload_json = mensaje.split(" ", 1)
-            evento = json.loads(payload_json)
+            sockets = dict(poller.poll())
+            if self.pull_socket in sockets:
+                mensaje = self.pull_socket.recv_string()
+                topico, payload_json = mensaje.split(" ", 1)
+                evento = json.loads(payload_json)
+                decision = self.procesar_evento(topico, evento)
+                if decision:
+                    self.control_semaforos.aplicar_accion(decision)
+                    self.failover.persistir_decision(decision)
 
-            print(f"[ANALITICA] recibido topico={topico} evento={evento}")
-
-            decision = self.procesar_evento(topico, evento)
-            if decision:
-                self.control_semaforos.aplicar_accion(decision)
-                self.persistencia.persistir_evento_procesado(decision)
+            if self.rep_socket in sockets:
+                solicitud = self.rep_socket.recv_json()
+                respuesta = self.procesar_solicitud_directa(solicitud)
+                self.rep_socket.send_json(respuesta)
 
     def procesar_evento(self, topico: str, evento: Dict[str, Any]) -> Dict[str, Any] | None:
         interseccion = evento["interseccion"]
-
-        if interseccion not in self.contextos_por_interseccion:
-            self.contextos_por_interseccion[interseccion] = {
-                "interseccion": interseccion
-            }
-
-        contexto = self.contextos_por_interseccion[interseccion]
+        contexto = self.contextos_por_interseccion.setdefault(interseccion, {"interseccion": interseccion})
 
         if topico == "camara":
             contexto["cola"] = evento.get("volumen")
             contexto["velocidad_promedio"] = evento.get("velocidad_promedio")
             contexto["timestamp"] = evento.get("timestamp")
-
         elif topico == "espira":
             contexto["vehiculos_contados"] = evento.get("vehiculos_contados")
             contexto["intervalo_segundos"] = evento.get("intervalo_segundos")
             contexto["timestamp"] = evento.get("timestamp_fin")
-
         elif topico == "gps":
             contexto["nivel_congestion"] = evento.get("nivel_congestion")
             contexto["velocidad_promedio"] = evento.get("velocidad_promedio")
@@ -79,7 +85,6 @@ class ServicioAnalitica:
             contexto["timestamp"] = evento.get("timestamp")
 
         regla = seleccionar_mejor_regla(self.reglas, contexto)
-
         if regla is None:
             decision = {
                 "interseccion": interseccion,
@@ -87,6 +92,7 @@ class ServicioAnalitica:
                 "accion": "SIN_ACCION",
                 "duracion_verde_segundos": 15,
                 "contexto": dict(contexto),
+                "origen": "ANALITICA",
             }
         else:
             decision = {
@@ -96,11 +102,50 @@ class ServicioAnalitica:
                 "duracion_verde_segundos": regla.resultado.duracion_verde_segundos,
                 "regla_aplicada": regla.id,
                 "contexto": dict(contexto),
+                "origen": "ANALITICA",
             }
 
         print(
-            f"[ANALITICA] decision -> interseccion={decision['interseccion']} | "
+            f"[ANALITICA] decision -> {decision['interseccion']} | "
             f"estado={decision['estado_circulacion']} | accion={decision['accion']}"
         )
-
         return decision
+
+    def procesar_solicitud_directa(self, solicitud: Dict[str, Any]) -> Dict[str, Any]:
+        tipo = solicitud.get("tipo")
+        interseccion = solicitud.get("interseccion")
+
+        if tipo == "priorizar_via":
+            decision = {
+                "interseccion": interseccion,
+                "estado_circulacion": "PRIORIZACION",
+                "accion": "PRIORIZAR_VIA",
+                "duracion_verde_segundos": solicitud.get("duracion_verde_segundos", 20),
+                "regla_aplicada": "MANUAL",
+                "contexto": {"timestamp": solicitud.get("timestamp"), "detalle": solicitud.get("detalle")},
+                "origen": "MANUAL",
+            }
+        elif tipo == "cambio_manual":
+            decision = {
+                "interseccion": interseccion,
+                "estado_circulacion": "PRIORIZACION",
+                "accion": solicitud.get("accion", "CAMBIAR_A_VERDE"),
+                "duracion_verde_segundos": solicitud.get("duracion_verde_segundos", 15),
+                "regla_aplicada": "MANUAL",
+                "contexto": {"timestamp": solicitud.get("timestamp"), "detalle": solicitud.get("detalle")},
+                "origen": "MANUAL",
+            }
+        else:
+            return {"ok": False, "error": f"tipo de solicitud no soportado: {tipo}"}
+
+        self.control_semaforos.aplicar_accion(decision)
+        self.failover.persistir_decision(decision)
+        self.failover.registrar_solicitud(
+            {
+                "tipo_solicitud": tipo.upper(),
+                "interseccion": interseccion,
+                "detalle": solicitud.get("detalle"),
+                "resultado_resumen": f"Acción ejecutada: {decision['accion']}",
+            }
+        )
+        return {"ok": True, "decision": decision}
