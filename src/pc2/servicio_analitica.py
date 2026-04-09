@@ -30,7 +30,7 @@ class ServicioAnalitica:
 
         self.context = zmq.Context.instance()
         self.pull_socket = self.context.socket(zmq.PULL)
-        self.pull_socket.connect(PC2_PULL_ENDPOINT)
+        self.pull_socket.bind(PC2_PULL_ENDPOINT)
 
         self.rep_socket = self.context.socket(zmq.REP)
         self.rep_socket.bind(ANALITICA_COMMAND_ENDPOINT)

@@ -22,12 +22,13 @@ class SensorCamara(SensorBase):
         )
 
     def construir_payload(self, evento: Dict[str, Any]) -> Dict[str, Any]:
+        from datetime import datetime, timezone
         return {
             "sensor_id": evento["sensor_id"],
             "tipo_sensor": "camara",
             "interseccion": evento["interseccion"],
             "volumen": evento["volumen"],
             "velocidad_promedio": evento["velocidad_promedio"],
-            "timestamp": evento["timestamp"],
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
             "topico": "camara"
         }

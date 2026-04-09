@@ -22,13 +22,17 @@ class SensorEspira(SensorBase):
         )
 
     def construir_payload(self, evento: Dict[str, Any]) -> Dict[str, Any]:
+        from datetime import datetime, timezone, timedelta
+        ts_fin = datetime.now(timezone.utc)
+        ts_inicio = ts_fin - timedelta(seconds=evento.get("intervalo_segundos", 30))
+        fmt = lambda dt: dt.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
         return {
             "sensor_id": evento["sensor_id"],
             "tipo_sensor": "espira_inductiva",
             "interseccion": evento["interseccion"],
             "vehiculos_contados": evento["vehiculos_contados"],
             "intervalo_segundos": evento["intervalo_segundos"],
-            "timestamp_inicio": evento["timestamp_inicio"],
-            "timestamp_fin": evento["timestamp_fin"],
+            "timestamp_inicio": fmt(ts_inicio),
+            "timestamp_fin": fmt(ts_fin),
             "topico": "espira"
         }

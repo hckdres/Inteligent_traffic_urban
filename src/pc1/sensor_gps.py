@@ -22,6 +22,7 @@ class SensorGPS(SensorBase):
         )
 
     def construir_payload(self, evento: Dict[str, Any]) -> Dict[str, Any]:
+        from datetime import datetime, timezone
         return {
             "sensor_id": evento["sensor_id"],
             "tipo_sensor": "gps",
@@ -29,6 +30,6 @@ class SensorGPS(SensorBase):
             "nivel_congestion": evento["nivel_congestion"],
             "velocidad_promedio": evento["velocidad_promedio"],
             "densidad": evento["densidad"],
-            "timestamp": evento["timestamp"],
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
             "topico": "gps"
         }

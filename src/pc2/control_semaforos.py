@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 
@@ -38,7 +38,7 @@ class ControlSemaforos:
                 "duracion_verde_segundos": duracion,
                 "estado_circulacion": estado_circulacion,
                 "accion": accion,
-                "actualizado_en": datetime.now().isoformat(timespec="seconds"),
+                "actualizado_en": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             }
 
         cambio = f"{estado_anterior} → {nuevo_estado}" if estado_anterior != nuevo_estado else f"mantiene {nuevo_estado}"

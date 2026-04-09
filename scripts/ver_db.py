@@ -63,8 +63,8 @@ def mostrar_conteos(conn: sqlite3.Connection, console) -> None:
 
 
 def mostrar_tabla(conn: sqlite3.Connection, console, query: str,
-                  titulo: str, limite: int = 20) -> None:
-    filas = conn.execute(query).fetchall()
+                  titulo: str, limite: int = 20, params: tuple = ()) -> None:
+    filas = conn.execute(query, params).fetchall()
     if not filas:
         if RICH:
             console.print(f"[dim]{titulo}: sin datos[/dim]")
@@ -218,9 +218,9 @@ def menu_interactivo(ruta_db: str, limite: int) -> None:
                                et.densidad_trafico, et.origen
                         FROM estado_trafico et
                         JOIN interseccion i ON i.id = et.interseccion_id
-                        WHERE i.codigo = '{inter}'
+                        WHERE i.codigo = ?
                         ORDER BY et.id DESC LIMIT {limite}""",
-                    f"Historial {inter}", limite)
+                    f"Historial {inter}", limite, (inter,))
 
             elif opcion == "9":
                 pr("[bold]Saliendo...[/bold]" if RICH else "Saliendo...")

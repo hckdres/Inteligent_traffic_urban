@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -28,17 +28,11 @@ class RepositorioSQLite:
     # ------------------------------------------------------------------ #
 
     def _inicializar(self) -> None:
+        # El schema usa CREATE TABLE IF NOT EXISTS, por lo que es seguro
+        # ejecutarlo siempre: crea las tablas si no existen y NO borra datos.
+        script = _SCHEMA.read_text(encoding="utf-8")
         with self._conn() as conn:
-            conn.execute("PRAGMA foreign_keys = ON")
-            if not self._tablas_existen(conn):
-                script = _SCHEMA.read_text(encoding="utf-8")
-                conn.executescript(script)
-
-    def _tablas_existen(self, conn: sqlite3.Connection) -> bool:
-        filas = conn.execute(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='interseccion'"
-        ).fetchone()
-        return filas[0] > 0
+            conn.executescript(script)
 
     def _conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.ruta_db, check_same_thread=False)
@@ -109,7 +103,7 @@ class RepositorioSQLite:
                    (sensor_id, interseccion_id, tipo_evento, ts_evento, payload_json)
                    VALUES (?,?,?,?,?)""",
                 (sensor_id, inter_id, "LONGITUD_COLA",
-                 evento.get("timestamp", datetime.now().isoformat()),
+                 evento.get("timestamp", datetime.now(timezone.utc).isoformat()),
                  json.dumps(evento)),
             )
             conn.execute(
@@ -129,7 +123,7 @@ class RepositorioSQLite:
                    (sensor_id, interseccion_id, tipo_evento, ts_evento, payload_json)
                    VALUES (?,?,?,?,?)""",
                 (sensor_id, inter_id, "CONTEO_VEHICULAR",
-                 evento.get("timestamp_fin", datetime.now().isoformat()),
+                 evento.get("timestamp_fin", datetime.now(timezone.utc).isoformat()),
                  json.dumps(evento)),
             )
             conn.execute(
@@ -154,7 +148,7 @@ class RepositorioSQLite:
                    (sensor_id, interseccion_id, tipo_evento, ts_evento, payload_json)
                    VALUES (?,?,?,?,?)""",
                 (sensor_id, inter_id, "DENSIDAD_TRAFICO",
-                 evento.get("timestamp", datetime.now().isoformat()),
+                 evento.get("timestamp", datetime.now(timezone.utc).isoformat()),
                  json.dumps(evento)),
             )
             conn.execute(
@@ -200,7 +194,7 @@ class RepositorioSQLite:
                    VALUES (?,?,?,?,?,?,?,?,?)""",
                 (
                     inter_id,
-                    contexto.get("timestamp", datetime.now().isoformat()),
+                    contexto.get("timestamp", datetime.now(timezone.utc).isoformat()),
                     contexto.get("cola"),
                     contexto.get("vehiculos_contados"),
                     contexto.get("densidad"),
@@ -227,7 +221,7 @@ class RepositorioSQLite:
                         decision.get("regla_aplicada"),
                         origen,
                         "EJECUTADO",
-                        datetime.now().isoformat(),
+                        datetime.now(timezone.utc).isoformat(),
                     ),
                 )
 
@@ -257,7 +251,7 @@ class RepositorioSQLite:
                    VALUES (?,?,?,?,?)""",
                 (tipo, inter_id, solicitud.get("detalle"),
                  solicitud.get("resultado_resumen"),
-                 datetime.now().isoformat()),
+                 datetime.now(timezone.utc).isoformat()),
             )
             conn.commit()
 

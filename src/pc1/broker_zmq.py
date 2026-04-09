@@ -17,7 +17,7 @@ def main() -> None:
     subscriber.setsockopt_string(zmq.SUBSCRIBE, "gps")
 
     push_socket = context.socket(zmq.PUSH)
-    push_socket.bind(PC2_PUSH_ENDPOINT)
+    push_socket.connect(PC2_PUSH_ENDPOINT)
 
     print("[BROKER_PC1] iniciado. Escuchando sensores y reenviando a PC2...")
 

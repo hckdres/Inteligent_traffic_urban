@@ -82,16 +82,21 @@ class GestorFailover:
         retrasa el procesamiento de eventos de tráfico."""
         while True:
             mensaje = self._cola_pendientes.get()  # bloquea hasta haber algo
-            with self._lock:
-                disponible = self.primary_disponible
-            if not disponible:
-                continue  # descarta: PC3 caído, la réplica ya lo tiene
-            try:
-                self.push_primary.send_json(mensaje)
-                print(f"[PERSISTENCIA->PRIMARY] {mensaje['tipo']}")
-            except zmq.ZMQError as exc:
-                print(f"[FAILOVER] Error enviando a PRIMARY: {exc} — descartando mensaje")
-                self.actualizar_estado_primaria(False)
+            while True:
+                with self._lock:
+                    disponible = self.primary_disponible
+                if not disponible:
+                    import time
+                    time.sleep(1)
+                    continue
+                try:
+                    self.push_primary.send_json(mensaje)
+                    print(f"[PERSISTENCIA->PRIMARY] {mensaje['tipo']}")
+                    break
+                except zmq.ZMQError as exc:
+                    print(f"[FAILOVER] Error enviando a PRIMARY: {exc} — encolando para reintento")
+                    self.actualizar_estado_primaria(False)
+
 
     def _enviar_replica(self, mensaje: Dict[str, Any]) -> None:
         self.push_replica.send_json(mensaje)

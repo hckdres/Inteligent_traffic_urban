@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 import zmq
@@ -51,7 +51,7 @@ class MonitoreoConsulta:
                     "tipo": "priorizar_via",
                     "interseccion": inter,
                     "detalle": detalle,
-                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                    "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                     "duracion_verde_segundos": 20,
                 })
                 self.console.print(f"[bold green]Resultado:[/bold green] {res}")
@@ -63,7 +63,7 @@ class MonitoreoConsulta:
                     "interseccion": inter,
                     "accion": accion,
                     "detalle": "cambio manual desde PC3",
-                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                    "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                     "duracion_verde_segundos": 15,
                 })
                 self.console.print(f"[bold green]Resultado:[/bold green] {res}")
