@@ -7,7 +7,7 @@ from typing import Any, Dict
 import zmq
 
 
-PRIMARY_PERSIST_ENDPOINT = "tcp://127.0.0.1:5561"
+PRIMARY_PERSIST_ENDPOINT = "tcp://10.43.99.71:5561"
 REPLICA_PERSIST_ENDPOINT = "tcp://127.0.0.1:5560"
 
 
@@ -106,4 +106,4 @@ class GestorFailover:
             self.push_replica.send_json(mensaje)
             print(f"[PERSISTENCIA->REPLICA] {mensaje['tipo']}")
         except zmq.ZMQError as exc:
-            print(f"[FAILOVER] Error crítico: No se pudo persistir en RÉPLICA local (timeout/bloqueo): {exc}")
+            print(f"[FAILOVER] Error crítico: No se pudo persistir en RÉPLICA local (timeout/bloqueo): {exc}")

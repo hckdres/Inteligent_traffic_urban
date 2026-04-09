@@ -7,8 +7,8 @@ import zmq
 
 from src.persistence.repositorio_sqlite import RepositorioSQLite
 
-REPLICA_PERSIST_ENDPOINT = "tcp://127.0.0.1:5560"
-REPLICA_QUERY_ENDPOINT   = "tcp://127.0.0.1:5565"
+REPLICA_PERSIST_ENDPOINT = "tcp://*:5560"
+REPLICA_QUERY_ENDPOINT   = "tcp://*:5565"
 
 
 class ServidorBDReplica:

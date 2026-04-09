@@ -7,7 +7,7 @@ from typing import Callable
 import zmq
 
 
-PRIMARY_HEALTH_ENDPOINT = "tcp://127.0.0.1:5563"
+PRIMARY_HEALTH_ENDPOINT = "tcp://10.43.99.71:5563"
 
 
 class HealthCheckPC3(threading.Thread):

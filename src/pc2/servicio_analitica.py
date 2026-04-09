@@ -21,8 +21,8 @@ from src.pc2.gestor_failover import GestorFailover
 from src.pc2.health_check import HealthCheckPC3
 
 
-PC2_PULL_ENDPOINT = "tcp://127.0.0.1:5557"
-ANALITICA_COMMAND_ENDPOINT = "tcp://127.0.0.1:5562"
+PC2_PULL_ENDPOINT = "tcp://*:5557"
+ANALITICA_COMMAND_ENDPOINT = "tcp://*:5562"
 
 
 class ServicioAnalitica:
