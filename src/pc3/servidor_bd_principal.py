@@ -8,9 +8,9 @@ import zmq
 
 from src.persistence.repositorio_sqlite import RepositorioSQLite
 
-PRIMARY_PERSIST_ENDPOINT = "tcp://127.0.0.1:5561"
-PRIMARY_QUERY_ENDPOINT   = "tcp://127.0.0.1:5564"
-PRIMARY_HEALTH_ENDPOINT  = "tcp://127.0.0.1:5563"
+PRIMARY_PERSIST_ENDPOINT = "tcp://*:5561"
+PRIMARY_QUERY_ENDPOINT   = "tcp://*:5564"
+PRIMARY_HEALTH_ENDPOINT  = "tcp://*:5563"
 
 logger = logging.getLogger("pc3_db")
 

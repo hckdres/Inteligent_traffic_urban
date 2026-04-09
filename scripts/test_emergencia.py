@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.dominio.ambulancia import Ambulancia
 
-PC3_COMMAND_ENDPOINT = "tcp://127.0.0.1:5562" # Reenvía a analítica PC2
+PC3_COMMAND_ENDPOINT = "tcp://10.43.99.54:5562" # Reenvía a analítica PC2
 
 def probar_ambulancia(interseccion_codigo: str):
     context = zmq.Context()
