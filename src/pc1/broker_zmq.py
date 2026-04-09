@@ -4,7 +4,7 @@ import zmq
 
 
 SENSOR_PUB_ENDPOINT = "tcp://127.0.0.1:5556"
-PC2_PUSH_ENDPOINT = "tcp://127.0.0.1:5557"
+PC2_PUSH_ENDPOINT = "tcp://10.43.99.54:5557"
 
 
 def main() -> None:
