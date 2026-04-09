@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import queue
+import threading
 from typing import Any, Dict
 
 import zmq
@@ -14,61 +15,84 @@ class GestorFailover:
     def __init__(self) -> None:
         self.context = zmq.Context.instance()
 
+        # Socket hacia PRIMARY con timeout para no bloquear
         self.push_primary = self.context.socket(zmq.PUSH)
-        self.push_primary.setsockopt(zmq.SNDTIMEO, 2000)  # Evitar bloqueo infinito
+        self.push_primary.setsockopt(zmq.SNDTIMEO, 1500)
         self.push_primary.setsockopt(zmq.LINGER, 0)
         self.push_primary.connect(PRIMARY_PERSIST_ENDPOINT)
 
+        # Socket hacia REPLICA (siempre disponible, sin timeout)
         self.push_replica = self.context.socket(zmq.PUSH)
         self.push_replica.connect(REPLICA_PERSIST_ENDPOINT)
 
         self.primary_disponible = True
-        self._eventos_pendientes: "queue.Queue[Dict[str, Any]]" = queue.Queue()
+        self._lock = threading.Lock()  # Protege primary_disponible ante accesos concurrentes
+        self._cola_pendientes: queue.Queue[Dict[str, Any]] = queue.Queue()
+
+        # Hilo dedicado para envíos a PRIMARY — nunca bloquea al hilo de analítica
+        self._hilo_primary = threading.Thread(target=self._worker_primary, daemon=True)
+        self._hilo_primary.start()
+
+    # ------------------------------------------------------------------ #
+    # API pública                                                          #
+    # ------------------------------------------------------------------ #
 
     def actualizar_estado_primaria(self, disponible: bool) -> None:
-        if self.primary_disponible != disponible:
+        """Llamado desde HealthCheckPC3 (hilo externo) cuando cambia el estado de PC3."""
+        with self._lock:
+            if self.primary_disponible == disponible:
+                return
             self.primary_disponible = disponible
-            tipo = "RETURN_TO_PRIMARY" if disponible else "SWITCH_TO_REPLICA"
-            self._eventos_pendientes.put(
-                {
-                    "tipo": "registrar_failover",
-                    "payload": {
-                        "tipo_evento": tipo,
-                        "nodo_origen": "PC2",
-                        "descripcion": "Cambio automático de destino de persistencia",
-                    },
-                }
-            )
-            print(f"[FAILOVER] primary_disponible={self.primary_disponible}")
+
+        tipo = "RETURN_TO_PRIMARY" if disponible else "SWITCH_TO_REPLICA"
+        estado_str = "DISPONIBLE" if disponible else "CAÍDO — usando RÉPLICA"
+        print(f"[FAILOVER] PC3 {estado_str}")
+
+        # Registrar el evento de failover en ambas BDs
+        evento_failover = {
+            "tipo": "registrar_failover",
+            "payload": {
+                "tipo_evento": tipo,
+                "nodo_origen": "PC2",
+                "descripcion": "Cambio automático de destino de persistencia",
+            },
+        }
+        self._enviar_replica(evento_failover)
+        self._cola_pendientes.put(evento_failover)
 
     def persistir_decision(self, decision: Dict[str, Any]) -> None:
-        self._enviar(self.push_replica, {"tipo": "guardar_decision", "payload": decision}, "REPLICA")
-
-        if self.primary_disponible:
-            try:
-                self._enviar(self.push_primary, {"tipo": "guardar_decision", "payload": decision}, "PRIMARY")
-            except zmq.ZMQError:
-                self.actualizar_estado_primaria(False)
-
-        self._vaciar_eventos_pendientes()
+        """Persiste en REPLICA de forma inmediata y encola para PRIMARY (no bloquea)."""
+        mensaje = {"tipo": "guardar_decision", "payload": decision}
+        self._enviar_replica(mensaje)
+        self._cola_pendientes.put(mensaje)
 
     def registrar_solicitud(self, solicitud: Dict[str, Any]) -> None:
+        """Registra solicitud de usuario en ambas BDs."""
         mensaje = {"tipo": "guardar_solicitud", "payload": solicitud}
-        self._enviar(self.push_replica, mensaje, "REPLICA")
-        if self.primary_disponible:
+        self._enviar_replica(mensaje)
+        self._cola_pendientes.put(mensaje)
+
+    # ------------------------------------------------------------------ #
+    # Internos                                                             #
+    # ------------------------------------------------------------------ #
+
+    def _worker_primary(self) -> None:
+        """Hilo dedicado que consume la cola y envía a PRIMARY cuando está disponible.
+        Al estar separado del hilo de analítica, un timeout en PRIMARY nunca
+        retrasa el procesamiento de eventos de tráfico."""
+        while True:
+            mensaje = self._cola_pendientes.get()  # bloquea hasta haber algo
+            with self._lock:
+                disponible = self.primary_disponible
+            if not disponible:
+                continue  # descarta: PC3 caído, la réplica ya lo tiene
             try:
-                self._enviar(self.push_primary, mensaje, "PRIMARY")
-            except zmq.ZMQError:
+                self.push_primary.send_json(mensaje)
+                print(f"[PERSISTENCIA->PRIMARY] {mensaje['tipo']}")
+            except zmq.ZMQError as exc:
+                print(f"[FAILOVER] Error enviando a PRIMARY: {exc} — descartando mensaje")
                 self.actualizar_estado_primaria(False)
 
-    def _vaciar_eventos_pendientes(self) -> None:
-        while not self._eventos_pendientes.empty():
-            evento = self._eventos_pendientes.get()
-            self._enviar(self.push_replica, evento, "REPLICA")
-            if self.primary_disponible:
-                self._enviar(self.push_primary, evento, "PRIMARY")
-
-    @staticmethod
-    def _enviar(socket: zmq.Socket, mensaje: Dict[str, Any], destino: str) -> None:
-        socket.send_json(mensaje)
-        print(f"[PERSISTENCIA->{destino}] {mensaje['tipo']}")
+    def _enviar_replica(self, mensaje: Dict[str, Any]) -> None:
+        self.push_replica.send_json(mensaje)
+        print(f"[PERSISTENCIA->REPLICA] {mensaje['tipo']}")

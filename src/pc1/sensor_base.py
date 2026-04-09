@@ -31,7 +31,14 @@ class SensorBase(ABC):
         pass
 
     def generar_eventos(self):
+        """Genera eventos en loop continuo, reciclando el archivo JSON cuando se agota.
+        Antes: iteraba una sola vez y el hilo terminaba silenciosamente."""
         eventos = self.cargar_eventos()
-        for evento in eventos:
-            yield self.construir_payload(evento)
-            time.sleep(self.intervalo_segundos)
+        if not eventos:
+            print(f"[SENSOR][{self.sensor_id}] Sin eventos en JSON — hilo terminado")
+            return
+
+        while True:
+            for evento in eventos:
+                yield self.construir_payload(evento)
+                time.sleep(self.intervalo_segundos)
