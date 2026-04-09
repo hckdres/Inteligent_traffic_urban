@@ -21,9 +21,12 @@ class GestorFailover:
         self.push_primary.setsockopt(zmq.LINGER, 0)
         self.push_primary.connect(PRIMARY_PERSIST_ENDPOINT)
 
-        # Socket hacia REPLICA (siempre disponible, sin timeout)
+        # Socket hacia REPLICA (conectamos con timeout para seguridad)
         self.push_replica = self.context.socket(zmq.PUSH)
+        self.push_replica.setsockopt(zmq.SNDTIMEO, 1000)
+        self.push_replica.setsockopt(zmq.LINGER, 0)
         self.push_replica.connect(REPLICA_PERSIST_ENDPOINT)
+
 
         self.primary_disponible = True
         self._lock = threading.Lock()  # Protege primary_disponible ante accesos concurrentes
@@ -99,5 +102,8 @@ class GestorFailover:
 
 
     def _enviar_replica(self, mensaje: Dict[str, Any]) -> None:
-        self.push_replica.send_json(mensaje)
-        print(f"[PERSISTENCIA->REPLICA] {mensaje['tipo']}")
+        try:
+            self.push_replica.send_json(mensaje)
+            print(f"[PERSISTENCIA->REPLICA] {mensaje['tipo']}")
+        except zmq.ZMQError as exc:
+            print(f"[FAILOVER] Error crítico: No se pudo persistir en RÉPLICA local (timeout/bloqueo): {exc}")
