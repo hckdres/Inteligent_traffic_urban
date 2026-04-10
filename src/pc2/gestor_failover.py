@@ -1,18 +1,33 @@
 from __future__ import annotations
 
+import logging
 import queue
 import threading
 from typing import Any, Dict
+from datetime import datetime
+from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import zmq
 
 
 PRIMARY_PERSIST_ENDPOINT = "tcp://127.0.0.1:5561"
 REPLICA_PERSIST_ENDPOINT = "tcp://127.0.0.1:5560"
+COLOMBIA_TZ = ZoneInfo("America/Bogota")
+
+logger = logging.getLogger("pc2_persistencia")
 
 
 class GestorFailover:
     def __init__(self) -> None:
+        if not logger.handlers:
+            log_dir = Path("logs")
+            log_dir.mkdir(exist_ok=True)
+            file_handler = logging.FileHandler(log_dir / "pc2_persistencia.log", encoding="utf-8")
+            file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+            logger.addHandler(file_handler)
+            logger.setLevel(logging.INFO)
+
         self.context = zmq.Context.instance()
 
         # Socket hacia PRIMARY con timeout para no bloquear
@@ -49,7 +64,8 @@ class GestorFailover:
 
         tipo = "RETURN_TO_PRIMARY" if disponible else "SWITCH_TO_REPLICA"
         estado_str = "DISPONIBLE" if disponible else "CAÍDO — usando RÉPLICA"
-        print(f"[FAILOVER] PC3 {estado_str}")
+        hora = datetime.now(COLOMBIA_TZ).strftime("%H:%M:%S")
+        print(f"[{hora}][FAILOVER] PC3 {estado_str}")
 
         # Registrar el evento de failover en ambas BDs
         evento_failover = {
@@ -100,16 +116,16 @@ class GestorFailover:
                     continue
                 try:
                     self.push_primary.send_json(mensaje)
-                    print(f"[PERSISTENCIA->PRIMARY] {mensaje['tipo']}")
+                    logger.info("[PRIMARY] %s", mensaje["tipo"])
                     break
                 except zmq.ZMQError as exc:
-                    print(f"[FAILOVER] Error enviando a PRIMARY: {exc} — encolando para reintento")
+                    logger.warning("[PRIMARY] error enviando %s: %s", mensaje["tipo"], exc)
                     self.actualizar_estado_primaria(False)
 
 
     def _enviar_replica(self, mensaje: Dict[str, Any]) -> None:
         try:
             self.push_replica.send_json(mensaje)
-            print(f"[PERSISTENCIA->REPLICA] {mensaje['tipo']}")
+            logger.info("[REPLICA] %s", mensaje["tipo"])
         except zmq.ZMQError as exc:
             print(f"[FAILOVER] Error crítico: No se pudo persistir en RÉPLICA local (timeout/bloqueo): {exc}")

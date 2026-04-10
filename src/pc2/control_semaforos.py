@@ -3,6 +3,10 @@ from __future__ import annotations
 import threading
 from datetime import datetime, timezone
 from typing import Any, Dict
+from zoneinfo import ZoneInfo
+
+
+COLOMBIA_TZ = ZoneInfo("America/Bogota")
 
 
 class ControlSemaforos:
@@ -48,7 +52,7 @@ class ControlSemaforos:
         prioridad = " 🚑 AMBULANCIA" if accion in ("OLA_VERDE", "PRIORIZAR_VIA") else ""
 
         print(
-            f"[SEMAFORO] {interseccion} | {cambio} | "
+            f"[{datetime.now(COLOMBIA_TZ).strftime('%H:%M:%S')}][SEMAFORO] {interseccion} | {cambio} | "
             f"verde={duracion}s | {estado_circulacion}{alerta}{prioridad}"
         )
 

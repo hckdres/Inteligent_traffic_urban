@@ -12,6 +12,8 @@ import argparse
 import os
 import sys
 import threading
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # Permitir imports desde la raíz del proyecto
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -24,12 +26,22 @@ from src.pc1.sensor_espira import SensorEspira
 from src.pc1.sensor_gps import SensorGPS
 from src.messaging.zmq_publisher import ZMQPublisher
 
+COLOMBIA_TZ = ZoneInfo("America/Bogota")
+
+
+def _hora_colombia() -> str:
+    return datetime.now(COLOMBIA_TZ).strftime("%H:%M:%S")
+
 
 def publicar_eventos_sensor(sensor, publisher: ZMQPublisher) -> None:
     for evento in sensor.generar_eventos():
         topico = evento.pop("topico")
         publisher.publicar(topico, evento)
-        print(f"[PC1][{sensor.sensor_id}] -> topico='{topico}' interseccion={evento.get('interseccion')}")
+        print(
+            f"[{_hora_colombia()}][PC1][{sensor.sensor_id}] "
+            f"topico='{topico}' interseccion={evento.get('interseccion')} "
+            f"ts={evento.get('timestamp') or evento.get('timestamp_fin')}"
+        )
 
 
 def main(pc2_ip: str, multihilo: bool) -> None:

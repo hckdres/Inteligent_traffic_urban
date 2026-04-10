@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 import yaml
 import zmq
@@ -23,6 +24,7 @@ from src.pc2.health_check import HealthCheckPC3
 
 PC2_PULL_ENDPOINT = "tcp://127.0.0.1:5557"
 ANALITICA_COMMAND_ENDPOINT = "tcp://127.0.0.1:5562"
+COLOMBIA_TZ = ZoneInfo("America/Bogota")
 
 
 class ServicioAnalitica:
@@ -72,6 +74,12 @@ class ServicioAnalitica:
                 mensaje = self.pull_socket.recv_string()
                 topico, payload_json = mensaje.split(" ", 1)
                 evento_dict = json.loads(payload_json)
+                self.console.print(
+                    f"[dim][{datetime.now(COLOMBIA_TZ).strftime('%H:%M:%S')}] "
+                    f"{topico} sensor={evento_dict.get('sensor_id')} "
+                    f"inter={evento_dict.get('interseccion')} "
+                    f"ts={evento_dict.get('timestamp') or evento_dict.get('timestamp_fin')}[/dim]"
+                )
                 decision = self.procesar_evento(topico, evento_dict)
                 if decision:
                     self.control_semaforos.aplicar_accion(decision)
@@ -169,7 +177,8 @@ class ServicioAnalitica:
 
         self.console.print(Panel(
             Text.assemble(
-                ("Intersección: ", "bold"), (decision["interseccion"], "cyan"),
+                ("Hora COL: ", "bold"), (datetime.now(COLOMBIA_TZ).strftime("%H:%M:%S"), "white"),
+                ("\nIntersección: ", "bold"), (decision["interseccion"], "cyan"),
                 ("\nEstado: ", "bold"), (decision["estado_circulacion"], color),
                 ("\nAcción: ", "bold"), (decision["accion"], "bold yellow"),
                 ("\nDuración: ", "bold"), (f"{decision['duracion_verde_segundos']}s", "white")

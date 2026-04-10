@@ -30,20 +30,33 @@ except ImportError:
 
 
 COLOMBIA_TZ = ZoneInfo("America/Bogota")
+UTC_TZ = ZoneInfo("UTC")
 
 
 def formatear_valor(v):
     if v is None:
         return None
-    if isinstance(v, str) and "T" in v:
+    if isinstance(v, str):
         try:
-            texto = v[:-1] + "+00:00" if v.endswith("Z") else v
-            dt = datetime.fromisoformat(texto)
+            if "T" in v:
+                texto = v[:-1] + "+00:00" if v.endswith("Z") else v
+                dt = datetime.fromisoformat(texto)
+            elif len(v) == 19 and " " in v:
+                # SQLite CURRENT_TIMESTAMP llega naive; lo tratamos como UTC.
+                dt = datetime.strptime(v, "%Y-%m-%d %H:%M:%S").replace(tzinfo=ZoneInfo("UTC"))
+            else:
+                return v
+
             if dt.tzinfo is not None:
                 return dt.astimezone(COLOMBIA_TZ).strftime("%Y-%m-%d %H:%M:%S %Z")
         except Exception:
             return v
     return v
+
+
+def convertir_colombia_a_utc(texto: str) -> str:
+    dt = datetime.strptime(texto, "%Y-%m-%d %H:%M:%S").replace(tzinfo=COLOMBIA_TZ)
+    return dt.astimezone(UTC_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def conectar(ruta: str) -> sqlite3.Connection:
@@ -149,7 +162,9 @@ def menu_interactivo(ruta_db: str, limite: int) -> None:
             ("6", "Solicitudes de usuario"),
             ("7", "Eventos de failover"),
             ("8", "Buscar intersección específica"),
-            ("9", "Salir"),
+            ("9", "Buscar por sensor"),
+            ("10", "Buscar por rango horario"),
+            ("11", "Salir"),
         ]
         for num, desc in opciones:
             pr(f"  {num}) {desc}")
@@ -243,6 +258,45 @@ def menu_interactivo(ruta_db: str, limite: int) -> None:
                     f"Historial {inter}", limite, (inter,))
 
             elif opcion == "9":
+                sensor = input("Código sensor (ej. CAM-A1): ").strip()
+                mostrar_tabla(conn, console,
+                    f"""SELECT s.codigo as sensor, i.codigo as interseccion,
+                               es.tipo_evento, es.ts_evento,
+                               COALESCE(ec.volumen, ee.vehiculos_contados) as valor_principal,
+                               COALESCE(ec.velocidad_promedio, eg.velocidad_promedio) as velocidad,
+                               eg.nivel_congestion
+                        FROM evento_sensor es
+                        JOIN sensor s ON s.id = es.sensor_id
+                        JOIN interseccion i ON i.id = es.interseccion_id
+                        LEFT JOIN evento_camara ec ON ec.evento_id = es.id
+                        LEFT JOIN evento_espira ee ON ee.evento_id = es.id
+                        LEFT JOIN evento_gps eg ON eg.evento_id = es.id
+                        WHERE s.codigo = ?
+                        ORDER BY es.id DESC LIMIT {limite}""",
+                    f"Flujo del sensor {sensor}", limite, (sensor,))
+
+            elif opcion == "10":
+                print("Formato: YYYY-MM-DD HH:MM:SS")
+                inicio = input("Hora inicio (Colombia): ").strip()
+                fin = input("Hora fin (Colombia): ").strip()
+                inicio_utc = convertir_colombia_a_utc(inicio)
+                fin_utc = convertir_colombia_a_utc(fin)
+                mostrar_tabla(conn, console,
+                    f"""SELECT i.codigo as interseccion, s.codigo as sensor,
+                               es.tipo_evento, es.ts_evento,
+                               COALESCE(ec.volumen, ee.vehiculos_contados) as valor_principal,
+                               COALESCE(ec.velocidad_promedio, eg.velocidad_promedio) as velocidad
+                        FROM evento_sensor es
+                        JOIN sensor s ON s.id = es.sensor_id
+                        JOIN interseccion i ON i.id = es.interseccion_id
+                        LEFT JOIN evento_camara ec ON ec.evento_id = es.id
+                        LEFT JOIN evento_espira ee ON ee.evento_id = es.id
+                        LEFT JOIN evento_gps eg ON eg.evento_id = es.id
+                        WHERE datetime(es.ts_evento) BETWEEN datetime(?) AND datetime(?)
+                        ORDER BY es.ts_evento ASC LIMIT {limite}""",
+                    f"Eventos entre {inicio} y {fin}", limite, (inicio_utc, fin_utc))
+
+            elif opcion == "11":
                 pr("[bold]Saliendo...[/bold]" if RICH else "Saliendo...")
                 break
             else:
