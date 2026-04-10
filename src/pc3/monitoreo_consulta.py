@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Dict
+from zoneinfo import ZoneInfo
 
 import zmq
 from rich.console import Console
@@ -15,6 +16,7 @@ from rich import box
 PRIMARY_QUERY_ENDPOINT = "tcp://127.0.0.1:5564"
 REPLICA_QUERY_ENDPOINT = "tcp://127.0.0.1:5565"
 ANALITICA_COMMAND_ENDPOINT = "tcp://127.0.0.1:5562"
+COLOMBIA_TZ = ZoneInfo("America/Bogota")
 
 
 class MonitoreoConsulta:
@@ -81,20 +83,23 @@ class MonitoreoConsulta:
         fuente = res.get("fuente", "UNKNOWN")
         color_fuente = "green" if fuente == "PRIMARY" else "yellow"
         
-        table = Table(title=f"Estado Intersección {data[0]}", box=box.ROUNDED)
+        table = Table(title=f"Estado Intersección {data['codigo']}", box=box.ROUNDED)
         table.add_column("Propiedad", style="cyan")
         table.add_column("Valor", style="white")
         
         table.add_row("Fuente de Datos", f"[{color_fuente}]{fuente}[/{color_fuente}]")
-        table.add_row("Timestamp", str(data[1]))
+        table.add_row("Timestamp", self._formatear_ts(data.get("ts_estado")))
         
-        estado = str(data[2])
+        estado = str(data.get("clasificacion"))
         color_estado = "green" if estado == "NORMAL" else "red" if "CONGESTION" in estado else "blue"
         table.add_row("Estado Circulación", f"[{color_estado}]{estado}[/{color_estado}]")
         
-        table.add_row("Regla Aplicada", str(data[3]))
-        table.add_row("Acción Semáforo", f"[bold]{data[4]}[/bold]")
-        table.add_row("Duración Verde", f"{data[5]}s")
+        table.add_row("Regla Aplicada", str(data.get("regla_aplicada")))
+        table.add_row("Longitud Cola", str(data.get("longitud_cola")))
+        table.add_row("Velocidad Promedio", str(data.get("velocidad_promedio")))
+        table.add_row("Densidad", str(data.get("densidad_trafico")))
+        table.add_row("Estado Semáforo", f"[bold]{data.get('estado_actual')}[/bold]")
+        table.add_row("Duración Base", f"{data.get('duracion_base_seg')}s")
         
         self.console.print(table)
 
@@ -111,17 +116,31 @@ class MonitoreoConsulta:
         table.add_column("Acción", style="white")
 
         for fila in res["data"]:
-            estado = str(fila[2])
+            estado = str(fila.get("clasificacion"))
             color = "green" if estado == "NORMAL" else "red" if "CONGESTION" in estado else "blue"
             table.add_row(
-                str(fila[0]),
-                str(fila[1]),
+                str(fila.get("interseccion")),
+                self._formatear_ts(fila.get("ts_estado")),
                 f"[{color}]{estado}[/{color}]",
-                str(fila[3]),
-                str(fila[4])
+                str(fila.get("regla_aplicada")),
+                str(fila.get("origen"))
             )
         
         self.console.print(table)
+
+    def _formatear_ts(self, valor: Any) -> str:
+        if not valor:
+            return "N/A"
+        try:
+            texto = str(valor)
+            if texto.endswith("Z"):
+                texto = texto[:-1] + "+00:00"
+            dt = datetime.fromisoformat(texto)
+            if dt.tzinfo is None:
+                return texto
+            return dt.astimezone(COLOMBIA_TZ).strftime("%Y-%m-%d %H:%M:%S %Z")
+        except Exception:
+            return str(valor)
 
     def consultar_interseccion(self, interseccion: str) -> Dict[str, Any]:
         return self._consultar_con_failover({"tipo": "consultar_interseccion", "interseccion": interseccion})

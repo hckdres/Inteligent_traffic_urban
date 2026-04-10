@@ -14,6 +14,8 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -25,6 +27,23 @@ try:
     RICH = True
 except ImportError:
     RICH = False
+
+
+COLOMBIA_TZ = ZoneInfo("America/Bogota")
+
+
+def formatear_valor(v):
+    if v is None:
+        return None
+    if isinstance(v, str) and "T" in v:
+        try:
+            texto = v[:-1] + "+00:00" if v.endswith("Z") else v
+            dt = datetime.fromisoformat(texto)
+            if dt.tzinfo is not None:
+                return dt.astimezone(COLOMBIA_TZ).strftime("%Y-%m-%d %H:%M:%S %Z")
+        except Exception:
+            return v
+    return v
 
 
 def conectar(ruta: str) -> sqlite3.Connection:
@@ -80,6 +99,7 @@ def mostrar_tabla(conn: sqlite3.Connection, console, query: str,
         for fila in filas[:limite]:
             vals = []
             for v in fila:
+                v = formatear_valor(v)
                 s = str(v) if v is not None else "[dim]NULL[/dim]"
                 if s in ("CONGESTION",):
                     s = f"[red]{s}[/red]"
@@ -101,7 +121,7 @@ def mostrar_tabla(conn: sqlite3.Connection, console, query: str,
         print(" | ".join(cols))
         print("-" * 80)
         for fila in filas[:limite]:
-            print(" | ".join(str(v) if v is not None else "NULL" for v in fila))
+            print(" | ".join(str(formatear_valor(v)) if v is not None else "NULL" for v in fila))
         if len(filas) > limite:
             print(f"... y {len(filas)-limite} filas más")
 

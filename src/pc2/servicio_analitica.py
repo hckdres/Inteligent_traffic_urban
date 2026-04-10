@@ -45,6 +45,7 @@ class ServicioAnalitica:
         self._ultimo_gps: Dict[str, EventoGPS]    = {}
         # También mantenemos el contexto plano para compatibilidad de persistencia
         self.contextos_por_interseccion: Dict[str, Dict[str, Any]] = {}
+        self._ultima_firma_por_interseccion: Dict[str, tuple[str, str, int, str]] = {}
 
         self.console = Console()
         self.healthcheck = HealthCheckPC3(self.failover.actualizar_estado_primaria)
@@ -107,6 +108,8 @@ class ServicioAnalitica:
         else:
             return None
 
+        self.failover.persistir_evento_sensor(evento)
+
         # --- Mantener contexto plano para retrocompatibilidad con failover/persistencia ---
         contexto = self.contextos_por_interseccion.setdefault(interseccion, {"interseccion": interseccion})
         if topico == "camara":
@@ -128,7 +131,7 @@ class ServicioAnalitica:
         esp = self._ultimo_esp.get(interseccion)
         gps = self._ultimo_gps.get(interseccion)
 
-        regla = seleccionar_mejor_regla(self.reglas, cam, esp, gps)
+        regla = seleccionar_mejor_regla(self.reglas, cam, esp, gps, contexto)
 
         if regla is None:
             decision = {
@@ -150,6 +153,16 @@ class ServicioAnalitica:
                 "contexto": dict(contexto),
                 "origen": "ANALITICA",
             }
+
+        firma = (
+            decision["estado_circulacion"],
+            decision["accion"],
+            decision["duracion_verde_segundos"],
+            decision["regla_aplicada"],
+        )
+        if self._ultima_firma_por_interseccion.get(interseccion) == firma:
+            return None
+        self._ultima_firma_por_interseccion[interseccion] = firma
 
         color = "green" if decision["estado_circulacion"] == "NORMAL" else \
                 "red" if "CONGESTION" in decision["estado_circulacion"] else "blue"

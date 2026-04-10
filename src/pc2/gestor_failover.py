@@ -75,6 +75,12 @@ class GestorFailover:
         self._enviar_replica(mensaje)
         self._cola_pendientes.put(mensaje)
 
+    def persistir_evento_sensor(self, evento: Dict[str, Any]) -> None:
+        """Persiste eventos crudos de sensores en ambas BDs."""
+        mensaje = {"tipo": "guardar_evento_sensor", "payload": evento}
+        self._enviar_replica(mensaje)
+        self._cola_pendientes.put(mensaje)
+
     # ------------------------------------------------------------------ #
     # Internos                                                             #
     # ------------------------------------------------------------------ #
@@ -106,4 +112,4 @@ class GestorFailover:
             self.push_replica.send_json(mensaje)
             print(f"[PERSISTENCIA->REPLICA] {mensaje['tipo']}")
         except zmq.ZMQError as exc:
-            print(f"[FAILOVER] Error crítico: No se pudo persistir en RÉPLICA local (timeout/bloqueo): {exc}")
+            print(f"[FAILOVER] Error crítico: No se pudo persistir en RÉPLICA local (timeout/bloqueo): {exc}")
