@@ -2,18 +2,31 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 import zmq
+
+from src.utils.timezones import COLOMBIA_TZ
 
 
 SENSOR_PUB_ENDPOINT = "tcp://127.0.0.1:5556"
 PC2_PUSH_ENDPOINT = "tcp://127.0.0.1:5557"
-COLOMBIA_TZ = ZoneInfo("America/Bogota")
 
 
 def _hora_colombia() -> str:
     return datetime.now(COLOMBIA_TZ).strftime("%H:%M:%S")
+
+
+def _ts_colombia(valor: str | None) -> str | None:
+    if not valor:
+        return None
+    texto = valor[:-1] + "+00:00" if valor.endswith("Z") else valor
+    try:
+        dt = datetime.fromisoformat(texto)
+    except ValueError:
+        return valor
+    if dt.tzinfo is None:
+        return valor
+    return dt.astimezone(COLOMBIA_TZ).isoformat()
 
 
 def main() -> None:
@@ -36,14 +49,14 @@ def main() -> None:
         payload = json.loads(payload_json)
         print(
             f"[{_hora_colombia()}][BROKER_PC1] recibido "
-            f"sensor={payload.get('sensor_id')} topico={topico} "
+            f"seq={payload.get('seq')} sensor={payload.get('sensor_id')} topico={topico} "
             f"interseccion={payload.get('interseccion')} "
-            f"ts={payload.get('timestamp') or payload.get('timestamp_fin')}"
+            f"ts={_ts_colombia(payload.get('timestamp') or payload.get('timestamp_fin'))}"
         )
         push_socket.send_string(mensaje)
         print(
             f"[{_hora_colombia()}][BROKER_PC1] reenviado a PC2 "
-            f"sensor={payload.get('sensor_id')} topico={topico}"
+            f"seq={payload.get('seq')} sensor={payload.get('sensor_id')} topico={topico}"
         )
 
 

@@ -3,11 +3,12 @@ from __future__ import annotations
 import time
 import uuid
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List
 
 from src.persistence.repositorio_json import RepositorioJSON
 from src.enums.tipo_sensor import TipoSensor
+from src.utils.timezones import COLOMBIA_TZ
 
 
 class SensorBase(ABC):
@@ -26,11 +27,14 @@ class SensorBase(ABC):
         self.repositorio = RepositorioJSON(ruta_eventos=ruta_eventos)
         self._tipo_sensor_enum = TipoSensor[tipo_sensor.upper()] if tipo_sensor.upper() in TipoSensor.__members__ else None
 
+    def _payload_base(self) -> Dict[str, Any]:
+        return {"sensor_id": self.sensor_id}
+
     def _nuevo_evento_id(self) -> str:
         return str(uuid.uuid4())
 
     def _ts_ahora(self) -> datetime:
-        return datetime.now(timezone.utc)
+        return datetime.now(COLOMBIA_TZ)
 
     def cargar_eventos(self) -> List[Dict[str, Any]]:
         eventos = self.repositorio.filtrar_eventos_por_sensor(self.sensor_id)
@@ -50,4 +54,4 @@ class SensorBase(ABC):
         while True:
             for evento in eventos:
                 yield self.construir_payload(evento)
-                time.sleep(self.intervalo_segundos)
+                time.sleep(self.intervalo_segundos)

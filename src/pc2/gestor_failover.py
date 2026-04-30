@@ -6,14 +6,13 @@ import threading
 from typing import Any, Dict
 from datetime import datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 import zmq
 
+from src.utils.timezones import COLOMBIA_TZ
 
 PRIMARY_PERSIST_ENDPOINT = "tcp://127.0.0.1:5561"
 REPLICA_PERSIST_ENDPOINT = "tcp://127.0.0.1:5560"
-COLOMBIA_TZ = ZoneInfo("America/Bogota")
 
 logger = logging.getLogger("pc2_persistencia")
 

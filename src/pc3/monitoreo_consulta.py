@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Dict
-from zoneinfo import ZoneInfo
 
 import zmq
 from rich.console import Console
@@ -12,11 +11,12 @@ from rich.live import Live
 from rich.text import Text
 from rich import box
 
+from src.utils.timezones import COLOMBIA_TZ
+
 
 PRIMARY_QUERY_ENDPOINT = "tcp://127.0.0.1:5564"
 REPLICA_QUERY_ENDPOINT = "tcp://127.0.0.1:5565"
 ANALITICA_COMMAND_ENDPOINT = "tcp://127.0.0.1:5562"
-COLOMBIA_TZ = ZoneInfo("America/Bogota")
 
 
 class MonitoreoConsulta:
@@ -33,7 +33,8 @@ class MonitoreoConsulta:
             self.console.print("2) [bold]Histórico[/bold] (Rango de tiempo)")
             self.console.print("3) [bold]Priorizar vía[/bold] (Ambulancia/Emergencia)")
             self.console.print("4) [bold]Cambio manual[/bold] (Forzar semáforo)")
-            self.console.print("5) [bold red]Salir[/bold red]")
+            self.console.print("5) [bold]Buscar dato por seq[/bold]")
+            self.console.print("6) [bold red]Salir[/bold red]")
             
             opcion = self.console.input("\n[green]Seleccione opción:[/green] ").strip()
             if opcion == "1":
@@ -70,6 +71,10 @@ class MonitoreoConsulta:
                 })
                 self.console.print(f"[bold green]Resultado:[/bold green] {res}")
             elif opcion == "5":
+                seq = self.console.input("Seq dato (ej. [bold]1[/bold]): ").strip()
+                res = self.consultar_evento_seq(seq)
+                self._mostrar_resultado_evento_seq(res, seq)
+            elif opcion == "6":
                 break
             else:
                 self.console.print("[bold red]Opción inválida[/bold red]")
@@ -101,6 +106,35 @@ class MonitoreoConsulta:
         table.add_row("Estado Semáforo", f"[bold]{data.get('estado_actual')}[/bold]")
         table.add_row("Duración Base", f"{data.get('duracion_base_seg')}s")
         
+        self.console.print(table)
+
+    def _mostrar_resultado_evento_seq(self, res: Dict[str, Any], seq: str) -> None:
+        if not res.get("ok") or not res.get("data"):
+            self.console.print(f"[bold red]No se encontraron datos para seq={seq}.[/bold red]")
+            return
+
+        fuente = res.get("fuente", "UNKNOWN")
+        color_fuente = "green" if fuente == "PRIMARY" else "yellow"
+        table = Table(title=f"Dato seq={seq} ({fuente})", box=box.ROUNDED)
+        table.add_column("Seq", style="cyan", justify="right")
+        table.add_column("Sensor", style="white")
+        table.add_column("Intersección", style="cyan")
+        table.add_column("Evento", style="bold")
+        table.add_column("Timestamp", style="dim")
+        table.add_column("Valor", justify="right")
+        table.add_column("Velocidad", justify="right")
+
+        for fila in res["data"]:
+            table.add_row(
+                str(fila.get("seq")),
+                str(fila.get("sensor")),
+                str(fila.get("interseccion")),
+                str(fila.get("tipo_evento") or "SIN_EVENTOS"),
+                self._formatear_ts(fila.get("ts_evento")),
+                str(fila.get("valor_principal")),
+                str(fila.get("velocidad")),
+            )
+        table.caption = f"[{color_fuente}]Fuente de datos: {fuente}[/{color_fuente}]"
         self.console.print(table)
 
     def _mostrar_resultado_historico(self, res: Dict[str, Any]) -> None:
@@ -147,6 +181,9 @@ class MonitoreoConsulta:
 
     def consultar_historico(self, fecha_inicio: str, fecha_fin: str) -> Dict[str, Any]:
         return self._consultar_con_failover({"tipo": "consultar_historico", "fecha_inicio": fecha_inicio, "fecha_fin": fecha_fin})
+
+    def consultar_evento_seq(self, seq: str) -> Dict[str, Any]:
+        return self._consultar_con_failover({"tipo": "consultar_evento_seq", "seq": seq, "limite": 20})
 
     def enviar_indicacion(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         socket = self.context.socket(zmq.REQ)

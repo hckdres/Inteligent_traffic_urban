@@ -3,10 +3,8 @@ from __future__ import annotations
 import threading
 from datetime import datetime, timezone
 from typing import Any, Dict
-from zoneinfo import ZoneInfo
 
-
-COLOMBIA_TZ = ZoneInfo("America/Bogota")
+from src.utils.timezones import COLOMBIA_TZ
 
 
 class ControlSemaforos:

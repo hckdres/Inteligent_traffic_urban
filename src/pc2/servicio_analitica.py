@@ -4,7 +4,6 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from zoneinfo import ZoneInfo
 
 import yaml
 import zmq
@@ -20,11 +19,24 @@ from src.enums.estado_circulacion import EstadoCirculacion
 from src.pc2.control_semaforos import ControlSemaforos
 from src.pc2.gestor_failover import GestorFailover
 from src.pc2.health_check import HealthCheckPC3
+from src.utils.timezones import COLOMBIA_TZ
 
 
 PC2_PULL_ENDPOINT = "tcp://127.0.0.1:5557"
 ANALITICA_COMMAND_ENDPOINT = "tcp://127.0.0.1:5562"
-COLOMBIA_TZ = ZoneInfo("America/Bogota")
+
+
+def _ts_colombia(valor: str | None) -> str | None:
+    if not valor:
+        return None
+    texto = valor[:-1] + "+00:00" if valor.endswith("Z") else valor
+    try:
+        dt = datetime.fromisoformat(texto)
+    except ValueError:
+        return valor
+    if dt.tzinfo is None:
+        return valor
+    return dt.astimezone(COLOMBIA_TZ).isoformat()
 
 
 class ServicioAnalitica:
@@ -76,9 +88,10 @@ class ServicioAnalitica:
                 evento_dict = json.loads(payload_json)
                 self.console.print(
                     f"[dim][{datetime.now(COLOMBIA_TZ).strftime('%H:%M:%S')}] "
-                    f"{topico} sensor={evento_dict.get('sensor_id')} "
+                    f"{topico} seq={evento_dict.get('seq')} "
+                    f"sensor={evento_dict.get('sensor_id')} "
                     f"inter={evento_dict.get('interseccion')} "
-                    f"ts={evento_dict.get('timestamp') or evento_dict.get('timestamp_fin')}[/dim]"
+                    f"ts={_ts_colombia(evento_dict.get('timestamp') or evento_dict.get('timestamp_fin'))}[/dim]"
                 )
                 decision = self.procesar_evento(topico, evento_dict)
                 if decision:

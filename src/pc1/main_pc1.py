@@ -12,15 +12,32 @@ from src.messaging.zmq_publisher import ZMQPublisher
 BROKER_PUB_ENDPOINT = "tcp://127.0.0.1:5556"
 
 
-def publicar_eventos_sensor(sensor, publisher: ZMQPublisher) -> None:
+class SecuenciadorEventos:
+    def __init__(self, inicio: int = 1) -> None:
+        self._siguiente = inicio
+        self._lock = threading.Lock()
+
+    def siguiente(self) -> int:
+        with self._lock:
+            seq = self._siguiente
+            self._siguiente += 1
+            return seq
+
+
+def publicar_eventos_sensor(sensor, publisher: ZMQPublisher, secuenciador: SecuenciadorEventos) -> None:
     for evento in sensor.generar_eventos():
+        evento["seq"] = secuenciador.siguiente()
         topico = evento.pop("topico")
         publisher.publicar(topico, evento)
-        print(f"[PC1][{sensor.sensor_id}] publicado en topico '{topico}': {json.dumps(evento)}")
+        print(
+            f"[PC1][seq={evento['seq']}][{sensor.sensor_id}] "
+            f"publicado en topico '{topico}': {json.dumps(evento)}"
+        )
 
 
 def main() -> None:
     publisher = ZMQPublisher(BROKER_PUB_ENDPOINT)
+    secuenciador = SecuenciadorEventos()
 
     sensores = [
         SensorCamara("CAM-A1", "INT-A1", intervalo_segundos=2),
@@ -38,7 +55,7 @@ def main() -> None:
 
     hilos = []
     for sensor in sensores:
-        hilo = threading.Thread(target=publicar_eventos_sensor, args=(sensor, publisher), daemon=True)
+        hilo = threading.Thread(target=publicar_eventos_sensor, args=(sensor, publisher, secuenciador), daemon=True)
         hilo.start()
         hilos.append(hilo)
 

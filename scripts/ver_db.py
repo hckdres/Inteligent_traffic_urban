@@ -15,9 +15,10 @@ import sqlite3
 import sys
 from pathlib import Path
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.utils.timezones import COLOMBIA_TZ, UTC_TZ
 
 try:
     from rich.console import Console
@@ -27,10 +28,6 @@ try:
     RICH = True
 except ImportError:
     RICH = False
-
-
-COLOMBIA_TZ = ZoneInfo("America/Bogota")
-UTC_TZ = ZoneInfo("UTC")
 
 
 def formatear_valor(v):
@@ -43,7 +40,7 @@ def formatear_valor(v):
                 dt = datetime.fromisoformat(texto)
             elif len(v) == 19 and " " in v:
                 # SQLite CURRENT_TIMESTAMP llega naive; lo tratamos como UTC.
-                dt = datetime.strptime(v, "%Y-%m-%d %H:%M:%S").replace(tzinfo=ZoneInfo("UTC"))
+                dt = datetime.strptime(v, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC_TZ)
             else:
                 return v
 
@@ -163,8 +160,9 @@ def menu_interactivo(ruta_db: str, limite: int) -> None:
             ("7", "Eventos de failover"),
             ("8", "Buscar intersección específica"),
             ("9", "Buscar por sensor"),
-            ("10", "Buscar por rango horario"),
-            ("11", "Salir"),
+            ("10", "Buscar por seq de dato"),
+            ("11", "Buscar por rango horario"),
+            ("12", "Salir"),
         ]
         for num, desc in opciones:
             pr(f"  {num}) {desc}")
@@ -204,7 +202,7 @@ def menu_interactivo(ruta_db: str, limite: int) -> None:
 
             elif opcion == "4":
                 mostrar_tabla(conn, console,
-                    f"""SELECT i.codigo as interseccion, s.codigo as sensor,
+                    f"""SELECT es.seq, i.codigo as interseccion, s.codigo as sensor,
                                es.tipo_evento, es.ts_evento,
                                COALESCE(ec.volumen, ee.vehiculos_contados) as valor_principal,
                                COALESCE(ec.velocidad_promedio, eg.velocidad_promedio) as velocidad
@@ -260,7 +258,7 @@ def menu_interactivo(ruta_db: str, limite: int) -> None:
             elif opcion == "9":
                 sensor = input("Código sensor (ej. CAM-A1): ").strip()
                 mostrar_tabla(conn, console,
-                    f"""SELECT s.codigo as sensor, i.codigo as interseccion,
+                    f"""SELECT es.seq, s.codigo as sensor, i.codigo as interseccion,
                                es.tipo_evento, es.ts_evento,
                                COALESCE(ec.volumen, ee.vehiculos_contados) as valor_principal,
                                COALESCE(ec.velocidad_promedio, eg.velocidad_promedio) as velocidad,
@@ -276,13 +274,31 @@ def menu_interactivo(ruta_db: str, limite: int) -> None:
                     f"Flujo del sensor {sensor}", limite, (sensor,))
 
             elif opcion == "10":
+                seq = input("Seq dato (ej. 1): ").strip()
+                mostrar_tabla(conn, console,
+                    f"""SELECT es.seq, s.codigo as sensor, i.codigo as interseccion,
+                               es.tipo_evento, es.ts_evento,
+                               COALESCE(ec.volumen, ee.vehiculos_contados) as valor_principal,
+                               COALESCE(ec.velocidad_promedio, eg.velocidad_promedio) as velocidad,
+                               eg.nivel_congestion
+                        FROM evento_sensor es
+                        JOIN sensor s ON s.id = es.sensor_id
+                        JOIN interseccion i ON i.id = es.interseccion_id
+                        LEFT JOIN evento_camara ec ON ec.evento_id = es.id
+                        LEFT JOIN evento_espira ee ON ee.evento_id = es.id
+                        LEFT JOIN evento_gps eg ON eg.evento_id = es.id
+                        WHERE es.seq = ?
+                        ORDER BY es.id DESC LIMIT {limite}""",
+                    f"Dato con seq={seq}", limite, (seq,))
+
+            elif opcion == "11":
                 print("Formato: YYYY-MM-DD HH:MM:SS")
                 inicio = input("Hora inicio (Colombia): ").strip()
                 fin = input("Hora fin (Colombia): ").strip()
                 inicio_utc = convertir_colombia_a_utc(inicio)
                 fin_utc = convertir_colombia_a_utc(fin)
                 mostrar_tabla(conn, console,
-                    f"""SELECT i.codigo as interseccion, s.codigo as sensor,
+                    f"""SELECT es.seq, i.codigo as interseccion, s.codigo as sensor,
                                es.tipo_evento, es.ts_evento,
                                COALESCE(ec.volumen, ee.vehiculos_contados) as valor_principal,
                                COALESCE(ec.velocidad_promedio, eg.velocidad_promedio) as velocidad
@@ -296,7 +312,7 @@ def menu_interactivo(ruta_db: str, limite: int) -> None:
                         ORDER BY es.ts_evento ASC LIMIT {limite}""",
                     f"Eventos entre {inicio} y {fin}", limite, (inicio_utc, fin_utc))
 
-            elif opcion == "11":
+            elif opcion == "12":
                 pr("[bold]Saliendo...[/bold]" if RICH else "Saliendo...")
                 break
             else:

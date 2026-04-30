@@ -32,7 +32,9 @@ class RepositorioSQLite:
         # ejecutarlo siempre: crea las tablas si no existen y NO borra datos.
         script = _SCHEMA.read_text(encoding="utf-8")
         with self._conn() as conn:
+            self._preparar_migraciones_antes_de_schema(conn)
             conn.executescript(script)
+            self._migrar_evento_seq(conn)
 
     def _conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.ruta_db, check_same_thread=False)
@@ -40,6 +42,33 @@ class RepositorioSQLite:
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("PRAGMA journal_mode = WAL")   # mejor concurrencia
         return conn
+
+    def _migrar_evento_seq(self, conn: sqlite3.Connection) -> None:
+        columnas = {
+            fila["name"] for fila in conn.execute("PRAGMA table_info(evento_sensor)").fetchall()
+        }
+        if "seq" not in columnas:
+            conn.execute(
+                "ALTER TABLE evento_sensor ADD COLUMN seq INTEGER CHECK (seq IS NULL OR seq > 0)"
+            )
+            conn.execute("UPDATE evento_sensor SET seq = id WHERE seq IS NULL")
+
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_evento_sensor_seq ON evento_sensor(seq) WHERE seq IS NOT NULL"
+        )
+        conn.commit()
+
+    def _preparar_migraciones_antes_de_schema(self, conn: sqlite3.Connection) -> None:
+        if not self._tabla_existe(conn, "evento_sensor"):
+            return
+        if self._tabla_tiene_columna(conn, "evento_sensor", "seq"):
+            return
+
+        conn.execute(
+            "ALTER TABLE evento_sensor ADD COLUMN seq INTEGER CHECK (seq IS NULL OR seq > 0)"
+        )
+        conn.execute("UPDATE evento_sensor SET seq = id WHERE seq IS NULL")
+        conn.commit()
 
     # ------------------------------------------------------------------ #
     # Seed — poblar catálogos desde config                                 #
@@ -63,15 +92,45 @@ class RepositorioSQLite:
                 "espira_inductiva": "ESPIRA_INDUCTIVA",
                 "gps": "GPS",
             }
-            for s in config.get("sensores", []):
+            sensor_tiene_seq = self._tabla_tiene_columna(conn, "sensor", "seq")
+            for indice, s in enumerate(config.get("sensores", []), start=1):
                 inter_id = self._id_interseccion(conn, s["interseccion"])
                 if inter_id:
+                    if sensor_tiene_seq:
+                        conn.execute(
+                            """INSERT OR IGNORE INTO sensor
+                               (seq, codigo, tipo_sensor, interseccion_id, frecuencia_seg)
+                               VALUES (?,?,?,?,?)""",
+                            (
+                                indice,
+                                s["sensor_id"],
+                                tipo_map.get(s["tipo_sensor"], s["tipo_sensor"]),
+                                inter_id,
+                                s.get("intervalo_segundos"),
+                            ),
+                        )
+                    else:
+                        conn.execute(
+                            """INSERT OR IGNORE INTO sensor
+                               (codigo, tipo_sensor, interseccion_id, frecuencia_seg)
+                               VALUES (?,?,?,?)""",
+                            (
+                                s["sensor_id"],
+                                tipo_map.get(s["tipo_sensor"], s["tipo_sensor"]),
+                                inter_id,
+                                s.get("intervalo_segundos"),
+                            ),
+                        )
                     conn.execute(
-                        """INSERT OR IGNORE INTO sensor
-                           (codigo, tipo_sensor, interseccion_id, frecuencia_seg)
-                           VALUES (?,?,?,?)""",
-                        (s["sensor_id"], tipo_map.get(s["tipo_sensor"], s["tipo_sensor"]),
-                         inter_id, s.get("intervalo_segundos")),
+                        """UPDATE sensor
+                           SET tipo_sensor = ?, interseccion_id = ?, frecuencia_seg = ?
+                           WHERE codigo = ?""",
+                        (
+                            tipo_map.get(s["tipo_sensor"], s["tipo_sensor"]),
+                            inter_id,
+                            s.get("intervalo_segundos"),
+                            s["sensor_id"],
+                        ),
                     )
 
             # Semáforos
@@ -86,7 +145,22 @@ class RepositorioSQLite:
                          sem.get("estado_inicial", "ROJO"),
                          sem.get("duracion_verde_segundos", 15)),
                     )
-            conn.commit()
+        conn.commit()
+
+    @staticmethod
+    def _tabla_tiene_columna(conn: sqlite3.Connection, tabla: str, columna: str) -> bool:
+        return any(
+            fila["name"] == columna
+            for fila in conn.execute(f"PRAGMA table_info({tabla})").fetchall()
+        )
+
+    @staticmethod
+    def _tabla_existe(conn: sqlite3.Connection, tabla: str) -> bool:
+        fila = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (tabla,),
+        ).fetchone()
+        return fila is not None
 
     # ------------------------------------------------------------------ #
     # Guardar eventos de sensor                                            #
@@ -94,15 +168,17 @@ class RepositorioSQLite:
 
     def guardar_evento_camara(self, evento: Dict[str, Any]) -> None:
         with self._conn() as conn:
+            seq = self._seq_evento(conn, evento)
             sensor_id = self._id_sensor(conn, evento["sensor_id"])
             inter_id  = self._id_interseccion(conn, evento["interseccion"])
             if not sensor_id or not inter_id:
                 return
+            evento["seq"] = seq
             cur = conn.execute(
                 """INSERT INTO evento_sensor
-                   (sensor_id, interseccion_id, tipo_evento, ts_evento, payload_json)
-                   VALUES (?,?,?,?,?)""",
-                (sensor_id, inter_id, "LONGITUD_COLA",
+                   (seq, sensor_id, interseccion_id, tipo_evento, ts_evento, payload_json)
+                   VALUES (?,?,?,?,?,?)""",
+                (seq, sensor_id, inter_id, "LONGITUD_COLA",
                  evento.get("timestamp", datetime.now(timezone.utc).isoformat()),
                  json.dumps(evento)),
             )
@@ -114,15 +190,17 @@ class RepositorioSQLite:
 
     def guardar_evento_espira(self, evento: Dict[str, Any]) -> None:
         with self._conn() as conn:
+            seq = self._seq_evento(conn, evento)
             sensor_id = self._id_sensor(conn, evento["sensor_id"])
             inter_id  = self._id_interseccion(conn, evento["interseccion"])
             if not sensor_id or not inter_id:
                 return
+            evento["seq"] = seq
             cur = conn.execute(
                 """INSERT INTO evento_sensor
-                   (sensor_id, interseccion_id, tipo_evento, ts_evento, payload_json)
-                   VALUES (?,?,?,?,?)""",
-                (sensor_id, inter_id, "CONTEO_VEHICULAR",
+                   (seq, sensor_id, interseccion_id, tipo_evento, ts_evento, payload_json)
+                   VALUES (?,?,?,?,?,?)""",
+                (seq, sensor_id, inter_id, "CONTEO_VEHICULAR",
                  evento.get("timestamp_fin", datetime.now(timezone.utc).isoformat()),
                  json.dumps(evento)),
             )
@@ -139,15 +217,17 @@ class RepositorioSQLite:
 
     def guardar_evento_gps(self, evento: Dict[str, Any]) -> None:
         with self._conn() as conn:
+            seq = self._seq_evento(conn, evento)
             sensor_id = self._id_sensor(conn, evento["sensor_id"])
             inter_id  = self._id_interseccion(conn, evento["interseccion"])
             if not sensor_id or not inter_id:
                 return
+            evento["seq"] = seq
             cur = conn.execute(
                 """INSERT INTO evento_sensor
-                   (sensor_id, interseccion_id, tipo_evento, ts_evento, payload_json)
-                   VALUES (?,?,?,?,?)""",
-                (sensor_id, inter_id, "DENSIDAD_TRAFICO",
+                   (seq, sensor_id, interseccion_id, tipo_evento, ts_evento, payload_json)
+                   VALUES (?,?,?,?,?,?)""",
+                (seq, sensor_id, inter_id, "DENSIDAD_TRAFICO",
                  evento.get("timestamp", datetime.now(timezone.utc).isoformat()),
                  json.dumps(evento)),
             )
@@ -310,6 +390,30 @@ class RepositorioSQLite:
             ).fetchall()
             return [dict(f) for f in filas]
 
+    def consultar_evento_seq(
+        self, seq: int, limite: int = _MAX_ROWS_DISPLAY
+    ) -> List[Dict[str, Any]]:
+        with self._conn() as conn:
+            filas = conn.execute(
+                """SELECT es.seq, s.codigo AS sensor, s.tipo_sensor,
+                          i.codigo AS interseccion, es.id AS evento_id,
+                          es.tipo_evento, es.ts_evento,
+                          COALESCE(ec.volumen, ee.vehiculos_contados) AS valor_principal,
+                          COALESCE(ec.velocidad_promedio, eg.velocidad_promedio) AS velocidad,
+                          eg.nivel_congestion
+                   FROM sensor s
+                   JOIN interseccion i ON i.id = s.interseccion_id
+                   LEFT JOIN evento_sensor es ON es.sensor_id = s.id
+                   LEFT JOIN evento_camara ec ON ec.evento_id = es.id
+                   LEFT JOIN evento_espira ee ON ee.evento_id = es.id
+                   LEFT JOIN evento_gps eg ON eg.evento_id = es.id
+                   WHERE es.seq = ?
+                   ORDER BY es.id DESC
+                   LIMIT ?""",
+                (seq, limite),
+            ).fetchall()
+            return [dict(f) for f in filas]
+
     def contar_filas(self) -> Dict[str, int]:
         """Útil para monitorear el tamaño de la BD sin traer datos."""
         tablas = [
@@ -356,6 +460,21 @@ class RepositorioSQLite:
             "SELECT id FROM sensor WHERE codigo = ?", (codigo,)
         ).fetchone()
         return fila[0] if fila else None
+
+    def _seq_evento(self, conn: sqlite3.Connection, evento: Dict[str, Any]) -> int:
+        seq = evento.get("seq")
+        if seq not in (None, ""):
+            try:
+                seq_int = int(seq)
+            except (TypeError, ValueError):
+                seq_int = 0
+            if seq_int > 0:
+                return seq_int
+
+        fila = conn.execute(
+            "SELECT COALESCE(MAX(seq), 0) + 1 FROM evento_sensor"
+        ).fetchone()
+        return int(fila[0])
 
     def _id_semaforo_por_interseccion(
         self, conn: sqlite3.Connection, interseccion_id: int

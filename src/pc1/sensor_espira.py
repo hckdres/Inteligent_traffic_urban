@@ -42,7 +42,7 @@ class SensorEspira(SensorBase):
         )
         payload = {"topico": "espira", "__evento__": obj.serializar()}
         payload.update({
-            "sensor_id": obj.sensorId,
+            **self._payload_base(),
             "interseccion": obj.interseccionId,
             "vehiculos_contados": obj.vehiculosContados,
             "intervalo_segundos": obj.intervaloSegundos,
@@ -50,4 +50,4 @@ class SensorEspira(SensorBase):
             "timestamp_fin": obj.timestampFin.isoformat(),
             "tipo_sensor": "espira_inductiva",
         })
-        return payload
+        return payload

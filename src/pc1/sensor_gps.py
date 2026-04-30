@@ -42,7 +42,7 @@ class SensorGPS(SensorBase):
         )
         payload = {"topico": "gps", "__evento__": obj.serializar()}
         payload.update({
-            "sensor_id": obj.sensorId,
+            **self._payload_base(),
             "interseccion": obj.interseccionId,
             "nivel_congestion": obj.nivelCongestion.value,
             "velocidad_promedio": obj.velocidadPromedio,
@@ -50,4 +50,4 @@ class SensorGPS(SensorBase):
             "timestamp": obj.timestamp.isoformat(),
             "tipo_sensor": "gps",
         })
-        return payload
+        return payload

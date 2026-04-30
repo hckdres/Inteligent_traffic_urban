@@ -13,7 +13,6 @@ import os
 import sys
 import threading
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 # Permitir imports desde la raíz del proyecto
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,20 +24,32 @@ from src.pc1.sensor_camara import SensorCamara
 from src.pc1.sensor_espira import SensorEspira
 from src.pc1.sensor_gps import SensorGPS
 from src.messaging.zmq_publisher import ZMQPublisher
-
-COLOMBIA_TZ = ZoneInfo("America/Bogota")
+from src.utils.timezones import COLOMBIA_TZ
 
 
 def _hora_colombia() -> str:
     return datetime.now(COLOMBIA_TZ).strftime("%H:%M:%S")
 
 
-def publicar_eventos_sensor(sensor, publisher: ZMQPublisher) -> None:
+class SecuenciadorEventos:
+    def __init__(self, inicio: int = 1) -> None:
+        self._siguiente = inicio
+        self._lock = threading.Lock()
+
+    def siguiente(self) -> int:
+        with self._lock:
+            seq = self._siguiente
+            self._siguiente += 1
+            return seq
+
+
+def publicar_eventos_sensor(sensor, publisher: ZMQPublisher, secuenciador: SecuenciadorEventos) -> None:
     for evento in sensor.generar_eventos():
+        evento["seq"] = secuenciador.siguiente()
         topico = evento.pop("topico")
         publisher.publicar(topico, evento)
         print(
-            f"[{_hora_colombia()}][PC1][{sensor.sensor_id}] "
+            f"[{_hora_colombia()}][PC1][seq={evento['seq']}][{sensor.sensor_id}] "
             f"topico='{topico}' interseccion={evento.get('interseccion')} "
             f"ts={evento.get('timestamp') or evento.get('timestamp_fin')}"
         )
@@ -64,6 +75,7 @@ def main(pc2_ip: str, multihilo: bool) -> None:
     print(f"[PC1] Broker {'multihilo' if multihilo else 'simple'} iniciado")
 
     publisher = ZMQPublisher(broker_endpoint_local)
+    secuenciador = SecuenciadorEventos()
 
     sensores = [
         SensorCamara("CAM-A1", "INT-A1", intervalo_segundos=2),
@@ -83,7 +95,7 @@ def main(pc2_ip: str, multihilo: bool) -> None:
     for sensor in sensores:
         hilo = threading.Thread(
             target=publicar_eventos_sensor,
-            args=(sensor, publisher),
+            args=(sensor, publisher, secuenciador),
             daemon=True,
             name=f"sensor-{sensor.sensor_id}",
         )

@@ -37,11 +37,11 @@ class SensorCamara(SensorBase):
         payload = {"topico": "camara", "__evento__": obj.serializar()}
         # También añadimos los campos planos para compatibilidad con la persistencia de PC3
         payload.update({
-            "sensor_id": obj.sensorId,
+            **self._payload_base(),
             "interseccion": obj.interseccionId,
             "volumen": obj.volumen,
             "velocidad_promedio": obj.velocidadPromedio,
             "timestamp": obj.timestamp.isoformat(),
             "tipo_sensor": "camara",
         })
-        return payload
+        return payload

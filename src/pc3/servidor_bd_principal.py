@@ -100,6 +100,11 @@ class ServidorBDPrincipal:
                     consulta["fecha_inicio"], consulta["fecha_fin"]
                 )
                 return {"ok": True, "data": data}
+            if tipo in ("consultar_evento_seq", "consultar_sensor_seq"):
+                data = self.repo.consultar_evento_seq(
+                    int(consulta["seq"]), int(consulta.get("limite", 50))
+                )
+                return {"ok": bool(data), "data": data}
             if tipo == "contar_filas":
                 return {"ok": True, "data": self.repo.contar_filas()}
             return {"ok": False, "error": f"consulta no soportada: {tipo}"}
