@@ -3,6 +3,7 @@
     "tipo_evento": "INDICACION_DIRECTA",
     "origen": "MONITOREO_USUARIO",
     "interseccion": "INT-B2",
+    "modo_corredor": "COLUMNA",
     "via_id": "VIA-CENTRAL",
     "accion": "PRIORIZAR_VIA",
     "motivo": "AMBULANCIA",

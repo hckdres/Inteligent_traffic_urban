@@ -40,9 +40,15 @@ def _ts_colombia(valor: str | None) -> str | None:
 
 
 class ServicioAnalitica:
-    def __init__(self, ruta_reglas: str = "config/rules.yaml") -> None:
+    def __init__(
+        self,
+        ruta_reglas: str = "config/rules.yaml",
+        ruta_config_sistema: str = "src/config/system.json",
+    ) -> None:
         self.ruta_reglas = Path(ruta_reglas)
+        self.ruta_config_sistema = Path(ruta_config_sistema)
         self.reglas = self._cargar_reglas()
+        self.intersecciones_validas = self._cargar_intersecciones_validas()
         self.control_semaforos = ControlSemaforos()
         self.failover = GestorFailover()
 
@@ -73,6 +79,13 @@ class ServicioAnalitica:
             data = yaml.safe_load(archivo)
 
         return [ReglaTrafico.desde_dict(item) for item in data.get("reglas", [])]
+
+    def _cargar_intersecciones_validas(self) -> set[str]:
+        if not self.ruta_config_sistema.exists():
+            return set()
+        with self.ruta_config_sistema.open("r", encoding="utf-8") as archivo:
+            data = json.load(archivo)
+        return set(data.get("ciudad", {}).get("intersecciones", []))
 
     def escuchar_eventos(self) -> None:
         print("[ANALITICA] escuchando eventos y comandos...")
@@ -208,13 +221,27 @@ class ServicioAnalitica:
         interseccion = solicitud.get("interseccion")
 
         if tipo == "priorizar_via":
+            modo_corredor = str(solicitud.get("modo_corredor", "")).strip().upper()
+            intersecciones_afectadas = self._resolver_corredor_ambulancia(interseccion, modo_corredor)
+            if not intersecciones_afectadas:
+                return {
+                    "ok": False,
+                    "error": "No se pudo construir el corredor. Usa FILA o COLUMNA sobre una intersección válida.",
+                }
             decision = {
                 "interseccion": interseccion,
                 "estado_circulacion": EstadoCirculacion.PRIORIZACION.value,
-                "accion": AccionSemaforo.PRIORIZAR_VIA.value,
+                "accion": AccionSemaforo.OLA_VERDE.value,
                 "duracion_verde_segundos": solicitud.get("duracion_verde_segundos", 20),
-                "regla_aplicada": "MANUAL",
-                "contexto": {"timestamp": solicitud.get("timestamp"), "detalle": solicitud.get("detalle")},
+                "regla_aplicada": f"MANUAL_AMBULANCIA_{modo_corredor}",
+                "contexto": {
+                    "timestamp": solicitud.get("timestamp"),
+                    "detalle": solicitud.get("detalle"),
+                    "modo_corredor": modo_corredor,
+                    "motivo": "AMBULANCIA",
+                    "intersecciones_corredor": intersecciones_afectadas,
+                },
+                "intersecciones_afectadas": intersecciones_afectadas,
                 "origen": "MANUAL",
             }
         elif tipo == "cambio_manual":
@@ -241,9 +268,44 @@ class ServicioAnalitica:
             "tipo_solicitud": tipo.upper(),
             "interseccion": interseccion,
             "detalle": solicitud.get("detalle"),
-            "resultado_resumen": f"Acción ejecutada: {decision['accion']}",
+            "resultado_resumen": self._resumen_solicitud(decision),
         })
         return {"ok": True, "decision": decision}
+
+    def _resolver_corredor_ambulancia(
+        self, interseccion: str | None, modo_corredor: str
+    ) -> List[str]:
+        if not interseccion or interseccion not in self.intersecciones_validas:
+            return []
+        if modo_corredor not in {"FILA", "COLUMNA"}:
+            return []
+
+        fila, columna = self._descomponer_interseccion(interseccion)
+        candidatos: List[tuple[str, int, int]] = []
+        for codigo in self.intersecciones_validas:
+            fila_actual, columna_actual = self._descomponer_interseccion(codigo)
+            if modo_corredor == "FILA" and fila_actual == fila:
+                candidatos.append((codigo, fila_actual, columna_actual))
+            elif modo_corredor == "COLUMNA" and columna_actual == columna:
+                candidatos.append((codigo, fila_actual, columna_actual))
+
+        if modo_corredor == "FILA":
+            candidatos.sort(key=lambda item: item[2])
+        else:
+            candidatos.sort(key=lambda item: item[1])
+        return [codigo for codigo, _, _ in candidatos]
+
+    @staticmethod
+    def _descomponer_interseccion(interseccion: str) -> tuple[str, int]:
+        sufijo = interseccion.split("-", 1)[1]
+        return sufijo[0], int(sufijo[1:])
+
+    @staticmethod
+    def _resumen_solicitud(decision: Dict[str, Any]) -> str:
+        afectadas = decision.get("intersecciones_afectadas", [])
+        if afectadas:
+            return f"Acción ejecutada: {decision['accion']} sobre {', '.join(afectadas)}"
+        return f"Acción ejecutada: {decision['accion']}"
 
     # ----- Helpers privados de parseo -----
 

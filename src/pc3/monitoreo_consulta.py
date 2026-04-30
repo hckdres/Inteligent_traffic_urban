@@ -49,10 +49,12 @@ class MonitoreoConsulta:
                 self._mostrar_resultado_historico(res)
             elif opcion == "3":
                 inter = self.console.input("Intersección a priorizar: ").strip()
+                modo_corredor = self.console.input("Corredor ([bold]FILA[/bold]/[bold]COLUMNA[/bold]): ").strip().upper()
                 detalle = self.console.input("Detalle (ej. Ambulancia en camino): ").strip()
                 res = self.enviar_indicacion({
                     "tipo": "priorizar_via",
                     "interseccion": inter,
+                    "modo_corredor": modo_corredor,
                     "detalle": detalle,
                     "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                     "duracion_verde_segundos": 20,
