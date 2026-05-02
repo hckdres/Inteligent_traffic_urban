@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import threading
 from pathlib import Path
+from typing import List
 
+from src.config.configuracion_sistema import cargar_configuracion
 from src.pc1.sensor_camara import SensorCamara
 from src.pc1.sensor_espira import SensorEspira
 from src.pc1.sensor_gps import SensorGPS
@@ -53,23 +55,41 @@ def publicar_eventos_sensor(sensor, publisher: ZMQPublisher, secuenciador: Secue
         )
 
 
+def cargar_sensores_desde_config(ruta_config: str = "src/config/system.json") -> List[object]:
+    config = cargar_configuracion(ruta_config)
+    sensores_config = config.get("sensores", [])
+    clases_sensor = {
+        "camara": SensorCamara,
+        "espira_inductiva": SensorEspira,
+        "gps": SensorGPS,
+    }
+
+    sensores = []
+    for sensor_cfg in sensores_config:
+        tipo_sensor = sensor_cfg.get("tipo_sensor")
+        clase_sensor = clases_sensor.get(tipo_sensor)
+        if clase_sensor is None:
+            print(f"[PC1] Sensor omitido por tipo no soportado: {tipo_sensor}")
+            continue
+
+        sensores.append(
+            clase_sensor(
+                sensor_id=sensor_cfg["sensor_id"],
+                interseccion=sensor_cfg["interseccion"],
+                intervalo_segundos=int(sensor_cfg.get("intervalo_segundos", 2)),
+                ruta_eventos=sensor_cfg.get("ruta_eventos", "tests/muestras/events_sensores.json"),
+            )
+        )
+
+    return sensores
+
+
 def main() -> None:
     publisher = ZMQPublisher(BROKER_PUB_ENDPOINT)
     secuenciador = SecuenciadorEventos()
 
-    sensores = [
-        SensorCamara("CAM-A1", "INT-A1", intervalo_segundos=2),
-        SensorEspira("ESP-A1", "INT-A1", intervalo_segundos=2),
-        SensorGPS("GPS-A1", "INT-A1", intervalo_segundos=2),
-
-        SensorCamara("CAM-B2", "INT-B2", intervalo_segundos=2),
-        SensorEspira("ESP-B2", "INT-B2", intervalo_segundos=2),
-        SensorGPS("GPS-B2", "INT-B2", intervalo_segundos=2),
-
-        SensorCamara("CAM-C3", "INT-C3", intervalo_segundos=2),
-        SensorEspira("ESP-C3", "INT-C3", intervalo_segundos=2),
-        SensorGPS("GPS-C3", "INT-C3", intervalo_segundos=2),
-    ]
+    sensores = cargar_sensores_desde_config()
+    print(f"[PC1] Sensores cargados: {len(sensores)}")
 
     hilos = []
     for sensor in sensores:
