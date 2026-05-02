@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict
 
 import zmq
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.live import Live
 from rich.text import Text
 from rich import box
 
@@ -24,6 +25,7 @@ class MonitoreoConsulta:
         self.context = zmq.Context.instance()
         self.timeout_ms = 1500
         self.console = Console()
+        self.ciudad = self._cargar_ciudad()
 
     def ejecutar(self) -> None:
         self.console.print(Panel("[bold cyan]Gestión Inteligente de Tráfico Urbano[/bold cyan]\n[italic]Panel de Monitoreo y Consulta[/italic]", box=box.DOUBLE))
@@ -59,7 +61,7 @@ class MonitoreoConsulta:
                     "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                     "duracion_verde_segundos": 20,
                 })
-                self.console.print(f"[bold green]Resultado:[/bold green] {res}")
+                self._mostrar_resultado_priorizacion(res)
             elif opcion == "4":
                 inter = self.console.input("Intersección: ").strip()
                 accion = self.console.input("Acción ([bold]CAMBIAR_A_VERDE[/bold]/[bold]CAMBIAR_A_ROJO[/bold]): ").strip()
@@ -106,9 +108,89 @@ class MonitoreoConsulta:
         table.add_row("Velocidad Promedio", str(data.get("velocidad_promedio")))
         table.add_row("Densidad", str(data.get("densidad_trafico")))
         table.add_row("Estado Semáforo", f"[bold]{data.get('estado_actual')}[/bold]")
-        table.add_row("Duración Base", f"{data.get('duracion_base_seg')}s")
+        table.add_row("Duración Programada", f"{data.get('duracion_base_seg')}s")
         
         self.console.print(table)
+
+    def _mostrar_resultado_priorizacion(self, res: Dict[str, Any]) -> None:
+        if not res.get("ok"):
+            self.console.print(f"[bold red]No se pudo priorizar la vía:[/bold red] {res.get('error', 'Error desconocido')}")
+            return
+
+        decision = res.get("decision", {})
+        corredor = decision.get("contexto", {}).get("modo_corredor", "N/A")
+        afectadas = decision.get("intersecciones_afectadas", [])
+        interseccion = decision.get("interseccion", "N/A")
+        duracion = decision.get("duracion_verde_segundos", "N/A")
+        detalle = decision.get("contexto", {}).get("detalle") or "Sin detalle"
+
+        resumen = Table(box=box.ROUNDED, expand=False)
+        resumen.add_column("Campo", style="cyan")
+        resumen.add_column("Valor", style="white")
+        resumen.add_row("Intersección origen", f"[bold yellow]{interseccion}[/bold yellow]")
+        resumen.add_row("Corredor", f"[bold green]{corredor}[/bold green]")
+        resumen.add_row("Duración", f"[bold]{duracion}s[/bold]")
+        resumen.add_row("Detalle", detalle)
+        resumen.add_row("Intersecciones liberadas", ", ".join(afectadas) if afectadas else "Ninguna")
+
+        self.console.print(Panel(resumen, title="[bold green]Prioridad de Ambulancia Activada[/bold green]", border_style="green"))
+
+        mapa = self._render_mapa_corredor(interseccion, afectadas)
+        if mapa is not None:
+            self.console.print(mapa)
+
+    def _render_mapa_corredor(self, origen: str, afectadas: list[str]) -> Panel | None:
+        ciudad = self.ciudad
+        intersecciones = ciudad.get("intersecciones", [])
+        if not intersecciones:
+            return None
+
+        filas = {}
+        for codigo in intersecciones:
+            sufijo = codigo.split("-", 1)[1]
+            fila = sufijo[0]
+            columna = int(sufijo[1:])
+            filas.setdefault(fila, {})[columna] = codigo
+
+        tabla = Table(title="Mapa del corredor priorizado", box=box.SIMPLE_HEAVY, expand=False)
+        tabla.add_column("Fila", style="bold cyan", justify="center")
+        total_columnas = int(ciudad.get("columnas", 0))
+        for columna in range(1, total_columnas + 1):
+            tabla.add_column(str(columna), justify="center")
+
+        afectadas_set = set(afectadas)
+        for fila in sorted(filas):
+            celdas = [fila]
+            for columna in range(1, total_columnas + 1):
+                codigo = filas.get(fila, {}).get(columna)
+                if not codigo:
+                    celdas.append("-")
+                    continue
+
+                etiqueta = codigo.split("-", 1)[1]
+                if codigo == origen:
+                    celda = f"[bold black on bright_yellow]{etiqueta} AMB[/bold black on bright_yellow]"
+                elif codigo in afectadas_set:
+                    celda = f"[bold black on green]{etiqueta} PASO[/bold black on green]"
+                else:
+                    celda = f"[white on rgb(60,60,60)]{etiqueta} NORMAL[/white on rgb(60,60,60)]"
+                celdas.append(celda)
+            tabla.add_row(*celdas)
+
+        nota = Text("AMB = punto de referencia de la ambulancia | PASO = corredor con prioridad", style="dim")
+        tabla.caption = nota
+        return Panel(tabla, border_style="bright_green")
+
+    def _cargar_ciudad(self) -> Dict[str, Any]:
+        ruta = Path(__file__).resolve().parent.parent / "config" / "system.json"
+        if not ruta.exists():
+            return {}
+        try:
+            with ruta.open("r", encoding="utf-8") as archivo:
+                data = json.load(archivo)
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return data.get("ciudad", {})
 
     def _mostrar_resultado_evento_seq(self, res: Dict[str, Any], seq: str) -> None:
         if not res.get("ok") or not res.get("data"):

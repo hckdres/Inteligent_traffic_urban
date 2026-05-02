@@ -310,9 +310,15 @@ class RepositorioSQLite:
                     if estado_actual:
                         conn.execute(
                             """UPDATE semaforo
-                               SET estado_actual = ?, updated_at = CURRENT_TIMESTAMP
+                               SET estado_actual = ?,
+                                   duracion_base_seg = COALESCE(?, duracion_base_seg),
+                                   updated_at = CURRENT_TIMESTAMP
                                WHERE id = ?""",
-                            (estado_actual, semaforo_id),
+                            (
+                                estado_actual,
+                                decision.get("duracion_verde_segundos"),
+                                semaforo_id,
+                            ),
                         )
 
             conn.commit()
