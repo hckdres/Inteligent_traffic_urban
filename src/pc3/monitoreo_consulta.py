@@ -23,9 +23,10 @@ ANALITICA_COMMAND_ENDPOINT = "tcp://127.0.0.1:5562"
 class MonitoreoConsulta:
     def __init__(self) -> None:
         self.context = zmq.Context.instance()
-        self.timeout_ms = 1500
+        self.timeout_ms = 700
         self.console = Console()
         self.ciudad = self._cargar_ciudad()
+        self._primaria_disponible = True
 
     def ejecutar(self) -> None:
         self.console.print(Panel("[bold cyan]Gestión Inteligente de Tráfico Urbano[/bold cyan]\n[italic]Panel de Monitoreo y Consulta[/italic]", box=box.DOUBLE))
@@ -108,7 +109,11 @@ class MonitoreoConsulta:
         table.add_row("Velocidad Promedio", str(data.get("velocidad_promedio")))
         table.add_row("Densidad", str(data.get("densidad_trafico")))
         table.add_row("Estado Semáforo", f"[bold]{data.get('estado_actual')}[/bold]")
+        table.add_row("Último Comando", str(data.get("ultimo_comando") or "SIN_COMANDO"))
         table.add_row("Duración Programada", f"{data.get('duracion_base_seg')}s")
+        restante = self._prioridad_restante(data)
+        if restante is not None:
+            table.add_row("Prioridad Restante", f"[bold yellow]{restante}s[/bold yellow]")
         
         self.console.print(table)
 
@@ -283,12 +288,25 @@ class MonitoreoConsulta:
             socket.close(0)
 
     def _consultar_con_failover(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        if self._primaria_disponible:
+            respuesta = self._consultar(PRIMARY_QUERY_ENDPOINT, payload)
+            if respuesta.get("ok"):
+                respuesta["fuente"] = "PRIMARY"
+                return respuesta
+            if respuesta.get("error"):
+                self._primaria_disponible = False
+
+        respuesta = self._consultar(REPLICA_QUERY_ENDPOINT, payload)
+        if respuesta.get("ok"):
+            respuesta["fuente"] = "REPLICA"
+            return respuesta
+
         respuesta = self._consultar(PRIMARY_QUERY_ENDPOINT, payload)
         if respuesta.get("ok"):
+            self._primaria_disponible = True
             respuesta["fuente"] = "PRIMARY"
             return respuesta
 
-        respuesta = self._consultar(REPLICA_QUERY_ENDPOINT, payload)
         respuesta["fuente"] = "REPLICA"
         return respuesta
 
@@ -304,3 +322,22 @@ class MonitoreoConsulta:
             return {"ok": False, "error": str(exc)}
         finally:
             socket.close(0)
+
+    def _prioridad_restante(self, data: Dict[str, Any]) -> int | None:
+        if data.get("clasificacion") != "PRIORIZACION":
+            return None
+        ts_estado = data.get("ts_estado")
+        duracion = data.get("duracion_base_seg")
+        if not ts_estado or not duracion:
+            return None
+        try:
+            texto = str(ts_estado)
+            if texto.endswith("Z"):
+                texto = texto[:-1] + "+00:00"
+            inicio = datetime.fromisoformat(texto)
+            if inicio.tzinfo is None:
+                return None
+            restante = int(duracion) - int((datetime.now(COLOMBIA_TZ) - inicio.astimezone(COLOMBIA_TZ)).total_seconds())
+            return max(0, restante)
+        except Exception:
+            return None

@@ -11,7 +11,7 @@ PRIMARY_HEALTH_ENDPOINT = "tcp://127.0.0.1:5563"
 
 
 class HealthCheckPC3(threading.Thread):
-    def __init__(self, on_status_change: Callable[[bool], None], intervalo_segundos: int = 2) -> None:
+    def __init__(self, on_status_change: Callable[[bool], None], intervalo_segundos: int = 1) -> None:
         super().__init__(daemon=True)
         self.on_status_change = on_status_change
         self.intervalo_segundos = intervalo_segundos
@@ -22,8 +22,8 @@ class HealthCheckPC3(threading.Thread):
         """Crea un socket REQ fresco. Necesario tras cada fallo porque ZMQ REQ
         queda en estado corrupto si recv() no se completa correctamente."""
         socket = self.context.socket(zmq.REQ)
-        socket.setsockopt(zmq.RCVTIMEO, 1000)
-        socket.setsockopt(zmq.SNDTIMEO, 1000)
+        socket.setsockopt(zmq.RCVTIMEO, 500)
+        socket.setsockopt(zmq.SNDTIMEO, 500)
         socket.setsockopt(zmq.LINGER, 0)
         socket.connect(PRIMARY_HEALTH_ENDPOINT)
         return socket

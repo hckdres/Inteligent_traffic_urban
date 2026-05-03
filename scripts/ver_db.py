@@ -219,11 +219,23 @@ def menu_interactivo(ruta_db: str, limite: int) -> None:
                 mostrar_tabla(conn, console,
                     """SELECT s.codigo, i.codigo as interseccion,
                               s.estado_actual, s.duracion_base_seg,
+                              (
+                                  SELECT et.clasificacion
+                                  FROM estado_trafico et
+                                  WHERE et.interseccion_id = i.id
+                                  ORDER BY et.id DESC LIMIT 1
+                              ) as trafico_actual,
+                              (
+                                  SELECT et.regla_aplicada
+                                  FROM estado_trafico et
+                                  WHERE et.interseccion_id = i.id
+                                  ORDER BY et.id DESC LIMIT 1
+                              ) as regla_actual,
                               s.updated_at
                        FROM semaforo s
                        JOIN interseccion i ON i.id = s.interseccion_id
                        ORDER BY i.codigo""",
-                    "Estado de Semáforos", 50)
+                    "Estado Actual por Intersección", 50)
 
             elif opcion == "6":
                 mostrar_tabla(conn, console,

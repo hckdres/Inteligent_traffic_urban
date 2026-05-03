@@ -378,7 +378,13 @@ class RepositorioSQLite:
                 """SELECT i.codigo, et.ts_estado, et.clasificacion,
                           et.regla_aplicada, et.longitud_cola,
                           et.velocidad_promedio, et.densidad_trafico,
-                          s.estado_actual, s.duracion_base_seg
+                          s.estado_actual, s.duracion_base_seg,
+                          (
+                              SELECT cs.tipo_comando
+                              FROM comando_semaforo cs
+                              WHERE cs.interseccion_id = et.interseccion_id
+                              ORDER BY cs.id DESC LIMIT 1
+                          ) AS ultimo_comando
                    FROM estado_trafico et
                    JOIN interseccion i ON i.id = et.interseccion_id
                    LEFT JOIN semaforo s ON s.interseccion_id = et.interseccion_id

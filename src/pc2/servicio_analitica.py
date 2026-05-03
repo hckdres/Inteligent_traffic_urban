@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -66,6 +66,7 @@ class ServicioAnalitica:
         # También mantenemos el contexto plano para compatibilidad de persistencia
         self.contextos_por_interseccion: Dict[str, Dict[str, Any]] = {}
         self._ultima_firma_por_interseccion: Dict[str, tuple[str, str, int, str]] = {}
+        self._prioridades_activas: Dict[str, datetime] = {}
 
         self.console = Console()
         self.healthcheck = HealthCheckPC3(self.failover.actualizar_estado_primaria)
@@ -160,6 +161,9 @@ class ServicioAnalitica:
             contexto["densidad"] = evento.get("densidad")
             contexto["timestamp"] = evento.get("timestamp")
 
+        if self._prioridad_activa(interseccion):
+            return None
+
         # --- Evaluar con objetos tipados si todos los sensores reportaron ---
         cam = self._ultimo_cam.get(interseccion)
         esp = self._ultimo_esp.get(interseccion)
@@ -240,10 +244,15 @@ class ServicioAnalitica:
                     "modo_corredor": modo_corredor,
                     "motivo": "AMBULANCIA",
                     "intersecciones_corredor": intersecciones_afectadas,
+                    "prioridad_hasta": (
+                        datetime.now(timezone.utc)
+                        + timedelta(seconds=int(solicitud.get("duracion_verde_segundos", 20)))
+                    ).isoformat(timespec="seconds"),
                 },
                 "intersecciones_afectadas": intersecciones_afectadas,
                 "origen": "MANUAL",
             }
+            self._registrar_prioridad(decision)
         elif tipo == "cambio_manual":
             accion_str = solicitud.get("accion", "CAMBIAR_A_VERDE")
             try:
@@ -306,6 +315,23 @@ class ServicioAnalitica:
         if afectadas:
             return f"Acción ejecutada: {decision['accion']} sobre {', '.join(afectadas)}"
         return f"Acción ejecutada: {decision['accion']}"
+
+    def _registrar_prioridad(self, decision: Dict[str, Any]) -> None:
+        intersecciones = decision.get("intersecciones_afectadas") or [decision["interseccion"]]
+        expira_en = datetime.now(timezone.utc) + timedelta(
+            seconds=int(decision.get("duracion_verde_segundos", 20))
+        )
+        for codigo in intersecciones:
+            self._prioridades_activas[codigo] = expira_en
+
+    def _prioridad_activa(self, interseccion: str) -> bool:
+        expira_en = self._prioridades_activas.get(interseccion)
+        if expira_en is None:
+            return False
+        if datetime.now(timezone.utc) >= expira_en:
+            self._prioridades_activas.pop(interseccion, None)
+            return False
+        return True
 
     # ----- Helpers privados de parseo -----
 

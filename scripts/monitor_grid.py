@@ -42,20 +42,29 @@ def cargar_intersecciones() -> Tuple[List[str], int, int]:
 
 
 class ConsultorEstado:
-    def __init__(self, timeout_ms: int = 1200) -> None:
+    def __init__(self, timeout_ms: int = 500, reintento_primaria_segundos: float = 3.0) -> None:
         self.context = zmq.Context.instance()
         self.timeout_ms = timeout_ms
+        self.reintento_primaria_segundos = reintento_primaria_segundos
+        self._primaria_disponible = True
+        self._reintentar_primaria_en = 0.0
 
     def consultar_interseccion(self, interseccion: str) -> Dict[str, Any]:
         payload = {"tipo": "consultar_interseccion", "interseccion": interseccion}
 
-        respuesta = self._consultar(PRIMARY_QUERY_ENDPOINT, payload)
-        if respuesta.get("ok"):
-            respuesta["fuente"] = "PRIMARY"
-            return respuesta
-        if not respuesta.get("error"):
-            respuesta["fuente"] = "PRIMARY"
-            return respuesta
+        ahora = time.monotonic()
+        if self._primaria_disponible or ahora >= self._reintentar_primaria_en:
+            respuesta = self._consultar(PRIMARY_QUERY_ENDPOINT, payload)
+            if respuesta.get("ok"):
+                self._primaria_disponible = True
+                respuesta["fuente"] = "PRIMARY"
+                return respuesta
+            if not respuesta.get("error"):
+                self._primaria_disponible = True
+                respuesta["fuente"] = "PRIMARY"
+                return respuesta
+            self._primaria_disponible = False
+            self._reintentar_primaria_en = ahora + self.reintento_primaria_segundos
 
         respuesta = self._consultar(REPLICA_QUERY_ENDPOINT, payload)
         if respuesta.get("ok"):
@@ -141,17 +150,20 @@ def construir_panel(interseccion: str, respuesta: Dict[str, Any]) -> Panel:
     accion = str(data.get("estado_actual") or "SIN_ACCION")
     regla = str(data.get("regla_aplicada") or "SIN_REGLA")
     duracion = f"{data.get('duracion_base_seg', 'N/A')}s"
+    ultimo_comando = str(data.get("ultimo_comando") or "SIN_COMANDO")
     cola = str(data.get("longitud_cola", "N/A"))
     velocidad = str(data.get("velocidad_promedio", "N/A"))
     densidad = str(data.get("densidad_trafico", "N/A"))
     ts_estado = formatear_timestamp(data.get("ts_estado"))
     color = color_estado(estado)
+    prioridad_restante = calcular_prioridad_restante(data) if estado == "PRIORIZACION" else None
 
-    contenido = Group(
+    lineas = [
         Text.assemble(("Hora COL: ", "bold"), (ahora, "white")),
         Text.assemble(("Intersección: ", "bold"), (interseccion, "cyan")),
         Text.assemble(("Estado: ", "bold"), (estado, color)),
         Text.assemble(("Semáforo: ", "bold"), (accion, "bold yellow")),
+        Text.assemble(("Último comando: ", "bold"), (ultimo_comando, "white")),
         Text.assemble(("Duración: ", "bold"), (duracion, "white")),
         Text.assemble(("Regla: ", "bold"), (regla, "white")),
         Text.assemble(("Cola: ", "bold"), (cola, "white")),
@@ -159,9 +171,35 @@ def construir_panel(interseccion: str, respuesta: Dict[str, Any]) -> Panel:
         Text.assemble(("Densidad: ", "bold"), (densidad, "white")),
         Text.assemble(("Actualizado: ", "bold"), (ts_estado, "white")),
         Text.assemble(("Fuente: ", "bold"), (fuente, "magenta")),
-    )
+    ]
+
+    if prioridad_restante is not None:
+        lineas.insert(
+            5,
+            Text.assemble(("Prioridad restante: ", "bold"), (f"{prioridad_restante}s", "bold yellow")),
+        )
+
+    contenido = Group(*lineas)
 
     return Panel(contenido, title="Decisión de Tráfico", border_style=color)
+
+
+def calcular_prioridad_restante(data: Dict[str, Any]) -> int | None:
+    ts_estado = data.get("ts_estado")
+    duracion = data.get("duracion_base_seg")
+    if not ts_estado or not duracion:
+        return None
+    try:
+        texto = str(ts_estado)
+        if texto.endswith("Z"):
+            texto = texto[:-1] + "+00:00"
+        inicio = datetime.fromisoformat(texto)
+        if inicio.tzinfo is None:
+            return None
+        restante = int(duracion) - int((datetime.now(COLOMBIA_TZ) - inicio.astimezone(COLOMBIA_TZ)).total_seconds())
+        return max(0, restante)
+    except Exception:
+        return None
 
 
 def construir_layout(intersecciones: List[str], consultor: ConsultorEstado, filas: int, columnas: int) -> Layout:
