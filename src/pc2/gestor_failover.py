@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import queue
 import threading
 from typing import Any, Dict
@@ -13,6 +14,7 @@ from src.utils.timezones import COLOMBIA_TZ
 
 PRIMARY_PERSIST_ENDPOINT = "tcp://127.0.0.1:5561"
 REPLICA_PERSIST_ENDPOINT = "tcp://127.0.0.1:5560"
+MAX_PENDIENTES_DEFAULT = 5000
 
 logger = logging.getLogger("pc2_persistencia")
 
@@ -41,10 +43,14 @@ class GestorFailover:
         self.push_replica.setsockopt(zmq.LINGER, 0)
         self.push_replica.connect(REPLICA_PERSIST_ENDPOINT)
 
+        max_pendientes = int(os.getenv("PC2_MAX_PENDIENTES", str(MAX_PENDIENTES_DEFAULT)))
+        if max_pendientes <= 0:
+            max_pendientes = MAX_PENDIENTES_DEFAULT
 
         self.primary_disponible = True
         self._lock = threading.Lock()  # Protege primary_disponible ante accesos concurrentes
-        self._cola_pendientes: queue.Queue[Dict[str, Any]] = queue.Queue()
+        self._cola_pendientes: queue.Queue[Dict[str, Any]] = queue.Queue(maxsize=max_pendientes)
+        self._mensajes_descartados = 0
 
         # Hilo dedicado para envíos a PRIMARY — nunca bloquea al hilo de analítica
         self._hilo_primary = threading.Thread(target=self._worker_primary, daemon=True)
@@ -76,25 +82,25 @@ class GestorFailover:
             },
         }
         self._enviar_replica(evento_failover)
-        self._cola_pendientes.put(evento_failover)
+        self._encolar_para_primary(evento_failover, critico=True)
 
     def persistir_decision(self, decision: Dict[str, Any]) -> None:
         """Persiste en REPLICA de forma inmediata y encola para PRIMARY (no bloquea)."""
         mensaje = {"tipo": "guardar_decision", "payload": decision}
         self._enviar_replica(mensaje)
-        self._cola_pendientes.put(mensaje)
+        self._encolar_para_primary(mensaje, critico=True)
 
     def registrar_solicitud(self, solicitud: Dict[str, Any]) -> None:
         """Registra solicitud de usuario en ambas BDs."""
         mensaje = {"tipo": "guardar_solicitud", "payload": solicitud}
         self._enviar_replica(mensaje)
-        self._cola_pendientes.put(mensaje)
+        self._encolar_para_primary(mensaje, critico=True)
 
     def persistir_evento_sensor(self, evento: Dict[str, Any]) -> None:
         """Persiste eventos crudos de sensores en ambas BDs."""
         mensaje = {"tipo": "guardar_evento_sensor", "payload": evento}
         self._enviar_replica(mensaje)
-        self._cola_pendientes.put(mensaje)
+        self._encolar_para_primary(mensaje, critico=False)
 
     # ------------------------------------------------------------------ #
     # Internos                                                             #
@@ -121,6 +127,30 @@ class GestorFailover:
                     logger.warning("[PRIMARY] error enviando %s: %s", mensaje["tipo"], exc)
                     self.actualizar_estado_primaria(False)
 
+    def _encolar_para_primary(self, mensaje: Dict[str, Any], critico: bool) -> None:
+        """Evita crecimiento sin límite en memoria cuando PRIMARY está caído/lento."""
+        try:
+            if critico:
+                self._cola_pendientes.put(mensaje, timeout=0.5)
+            else:
+                self._cola_pendientes.put_nowait(mensaje)
+        except queue.Full:
+            self._mensajes_descartados += 1
+            tipo = mensaje.get("tipo", "desconocido")
+            if critico:
+                logger.error(
+                    "[PRIMARY] cola llena (%s). Mensaje crítico descartado tipo=%s descartados=%s",
+                    self._cola_pendientes.maxsize,
+                    tipo,
+                    self._mensajes_descartados,
+                )
+            else:
+                logger.warning(
+                    "[PRIMARY] cola llena (%s). Evento no crítico descartado tipo=%s descartados=%s",
+                    self._cola_pendientes.maxsize,
+                    tipo,
+                    self._mensajes_descartados,
+                )
 
     def _enviar_replica(self, mensaje: Dict[str, Any]) -> None:
         try:
