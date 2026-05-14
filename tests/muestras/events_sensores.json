@@ -1,0 +1,314 @@
+[
+  {
+    "sensor_id": "CAM-A1",
+    "tipo_sensor": "camara",
+    "interseccion": "INT-A1",
+    "volumen": 2,
+    "velocidad_promedio": 42,
+    "timestamp": "2026-04-08T08:00:00"
+  },
+  {
+    "sensor_id": "ESP-A1",
+    "tipo_sensor": "espira_inductiva",
+    "interseccion": "INT-A1",
+    "vehiculos_contados": 4,
+    "intervalo_segundos": 30,
+    "timestamp_inicio": "2026-04-08T08:00:00",
+    "timestamp_fin": "2026-04-08T08:00:30"
+  },
+  {
+    "sensor_id": "GPS-A1",
+    "tipo_sensor": "gps",
+    "interseccion": "INT-A1",
+    "nivel_congestion": "NORMAL",
+    "velocidad_promedio": 40,
+    "densidad": 12,
+    "timestamp": "2026-04-08T08:00:05"
+  },
+  {
+    "sensor_id": "CAM-B2",
+    "tipo_sensor": "camara",
+    "interseccion": "INT-B2",
+    "volumen": 3,
+    "velocidad_promedio": 38,
+    "timestamp": "2026-04-08T08:00:00"
+  },
+  {
+    "sensor_id": "ESP-B2",
+    "tipo_sensor": "espira_inductiva",
+    "interseccion": "INT-B2",
+    "vehiculos_contados": 5,
+    "intervalo_segundos": 30,
+    "timestamp_inicio": "2026-04-08T08:00:00",
+    "timestamp_fin": "2026-04-08T08:00:30"
+  },
+  {
+    "sensor_id": "GPS-B2",
+    "tipo_sensor": "gps",
+    "interseccion": "INT-B2",
+    "nivel_congestion": "NORMAL",
+    "velocidad_promedio": 36,
+    "densidad": 15,
+    "timestamp": "2026-04-08T08:00:05"
+  },
+  {
+    "sensor_id": "CAM-C3",
+    "tipo_sensor": "camara",
+    "interseccion": "INT-C3",
+    "volumen": 2,
+    "velocidad_promedio": 44,
+    "timestamp": "2026-04-08T08:00:00"
+  },
+  {
+    "sensor_id": "ESP-C3",
+    "tipo_sensor": "espira_inductiva",
+    "interseccion": "INT-C3",
+    "vehiculos_contados": 3,
+    "intervalo_segundos": 30,
+    "timestamp_inicio": "2026-04-08T08:00:00",
+    "timestamp_fin": "2026-04-08T08:00:30"
+  },
+  {
+    "sensor_id": "GPS-C3",
+    "tipo_sensor": "gps",
+    "interseccion": "INT-C3",
+    "nivel_congestion": "NORMAL",
+    "velocidad_promedio": 37,
+    "densidad": 14,
+    "timestamp": "2026-04-08T08:00:05"
+  },
+  {
+    "sensor_id": "CAM-A1",
+    "tipo_sensor": "camara",
+    "interseccion": "INT-A1",
+    "volumen": 9,
+    "velocidad_promedio": 18,
+    "timestamp": "2026-04-08T08:05:00"
+  },
+  {
+    "sensor_id": "ESP-A1",
+    "tipo_sensor": "espira_inductiva",
+    "interseccion": "INT-A1",
+    "vehiculos_contados": 18,
+    "intervalo_segundos": 30,
+    "timestamp_inicio": "2026-04-08T08:05:00",
+    "timestamp_fin": "2026-04-08T08:05:30"
+  },
+  {
+    "sensor_id": "GPS-A1",
+    "tipo_sensor": "gps",
+    "interseccion": "INT-A1",
+    "nivel_congestion": "NORMAL",
+    "velocidad_promedio": 20,
+    "densidad": 27,
+    "timestamp": "2026-04-08T08:05:05"
+  },
+  {
+    "sensor_id": "CAM-B2",
+    "tipo_sensor": "camara",
+    "interseccion": "INT-B2",
+    "volumen": 11,
+    "velocidad_promedio": 15,
+    "timestamp": "2026-04-08T08:05:00"
+  },
+  {
+    "sensor_id": "ESP-B2",
+    "tipo_sensor": "espira_inductiva",
+    "interseccion": "INT-B2",
+    "vehiculos_contados": 20,
+    "intervalo_segundos": 30,
+    "timestamp_inicio": "2026-04-08T08:05:00",
+    "timestamp_fin": "2026-04-08T08:05:30"
+  },
+  {
+    "sensor_id": "GPS-B2",
+    "tipo_sensor": "gps",
+    "interseccion": "INT-B2",
+    "nivel_congestion": "NORMAL",
+    "velocidad_promedio": 19,
+    "densidad": 28,
+    "timestamp": "2026-04-08T08:05:05"
+  },
+  {
+    "sensor_id": "CAM-C3",
+    "tipo_sensor": "camara",
+    "interseccion": "INT-C3",
+    "volumen": 8,
+    "velocidad_promedio": 21,
+    "timestamp": "2026-04-08T08:05:00"
+  },
+  {
+    "sensor_id": "ESP-C3",
+    "tipo_sensor": "espira_inductiva",
+    "interseccion": "INT-C3",
+    "vehiculos_contados": 16,
+    "intervalo_segundos": 30,
+    "timestamp_inicio": "2026-04-08T08:05:00",
+    "timestamp_fin": "2026-04-08T08:05:30"
+  },
+  {
+    "sensor_id": "GPS-C3",
+    "tipo_sensor": "gps",
+    "interseccion": "INT-C3",
+    "nivel_congestion": "NORMAL",
+    "velocidad_promedio": 20,
+    "densidad": 26,
+    "timestamp": "2026-04-08T08:05:05"
+  },
+  {
+    "sensor_id": "CAM-A1",
+    "tipo_sensor": "camara",
+    "interseccion": "INT-A1",
+    "volumen": 17,
+    "velocidad_promedio": 7,
+    "timestamp": "2026-04-08T08:10:00"
+  },
+  {
+    "sensor_id": "ESP-A1",
+    "tipo_sensor": "espira_inductiva",
+    "interseccion": "INT-A1",
+    "vehiculos_contados": 30,
+    "intervalo_segundos": 30,
+    "timestamp_inicio": "2026-04-08T08:10:00",
+    "timestamp_fin": "2026-04-08T08:10:30"
+  },
+  {
+    "sensor_id": "GPS-A1",
+    "tipo_sensor": "gps",
+    "interseccion": "INT-A1",
+    "nivel_congestion": "BAJA",
+    "velocidad_promedio": 7,
+    "densidad": 40,
+    "timestamp": "2026-04-08T08:10:05"
+  },
+  {
+    "sensor_id": "CAM-B2",
+    "tipo_sensor": "camara",
+    "interseccion": "INT-B2",
+    "volumen": 16,
+    "velocidad_promedio": 8,
+    "timestamp": "2026-04-08T08:10:00"
+  },
+  {
+    "sensor_id": "ESP-B2",
+    "tipo_sensor": "espira_inductiva",
+    "interseccion": "INT-B2",
+    "vehiculos_contados": 28,
+    "intervalo_segundos": 30,
+    "timestamp_inicio": "2026-04-08T08:10:00",
+    "timestamp_fin": "2026-04-08T08:10:30"
+  },
+  {
+    "sensor_id": "GPS-B2",
+    "tipo_sensor": "gps",
+    "interseccion": "INT-B2",
+    "nivel_congestion": "BAJA",
+    "velocidad_promedio": 6,
+    "densidad": 38,
+    "timestamp": "2026-04-08T08:10:05"
+  },
+  {
+    "sensor_id": "CAM-C3",
+    "tipo_sensor": "camara",
+    "interseccion": "INT-C3",
+    "volumen": 15,
+    "velocidad_promedio": 9,
+    "timestamp": "2026-04-08T08:10:00"
+  },
+  {
+    "sensor_id": "ESP-C3",
+    "tipo_sensor": "espira_inductiva",
+    "interseccion": "INT-C3",
+    "vehiculos_contados": 25,
+    "intervalo_segundos": 30,
+    "timestamp_inicio": "2026-04-08T08:10:00",
+    "timestamp_fin": "2026-04-08T08:10:30"
+  },
+  {
+    "sensor_id": "GPS-C3",
+    "tipo_sensor": "gps",
+    "interseccion": "INT-C3",
+    "nivel_congestion": "BAJA",
+    "velocidad_promedio": 8,
+    "densidad": 36,
+    "timestamp": "2026-04-08T08:10:05"
+  },
+  {
+    "sensor_id": "CAM-A1",
+    "tipo_sensor": "camara",
+    "interseccion": "INT-A1",
+    "volumen": 2,
+    "velocidad_promedio": 45,
+    "timestamp": "2026-04-08T08:20:00"
+  },
+  {
+    "sensor_id": "ESP-A1",
+    "tipo_sensor": "espira_inductiva",
+    "interseccion": "INT-A1",
+    "vehiculos_contados": 4,
+    "intervalo_segundos": 30,
+    "timestamp_inicio": "2026-04-08T08:20:00",
+    "timestamp_fin": "2026-04-08T08:20:30"
+  },
+  {
+    "sensor_id": "GPS-A1",
+    "tipo_sensor": "gps",
+    "interseccion": "INT-A1",
+    "nivel_congestion": "ALTA",
+    "velocidad_promedio": 46,
+    "densidad": 8,
+    "timestamp": "2026-04-08T08:20:05"
+  },
+  {
+    "sensor_id": "CAM-B2",
+    "tipo_sensor": "camara",
+    "interseccion": "INT-B2",
+    "volumen": 1,
+    "velocidad_promedio": 50,
+    "timestamp": "2026-04-08T08:20:00"
+  },
+  {
+    "sensor_id": "ESP-B2",
+    "tipo_sensor": "espira_inductiva",
+    "interseccion": "INT-B2",
+    "vehiculos_contados": 3,
+    "intervalo_segundos": 30,
+    "timestamp_inicio": "2026-04-08T08:20:00",
+    "timestamp_fin": "2026-04-08T08:20:30"
+  },
+  {
+    "sensor_id": "GPS-B2",
+    "tipo_sensor": "gps",
+    "interseccion": "INT-B2",
+    "nivel_congestion": "ALTA",
+    "velocidad_promedio": 48,
+    "densidad": 7,
+    "timestamp": "2026-04-08T08:20:05"
+  },
+  {
+    "sensor_id": "CAM-C3",
+    "tipo_sensor": "camara",
+    "interseccion": "INT-C3",
+    "volumen": 1,
+    "velocidad_promedio": 47,
+    "timestamp": "2026-04-08T08:20:00"
+  },
+  {
+    "sensor_id": "ESP-C3",
+    "tipo_sensor": "espira_inductiva",
+    "interseccion": "INT-C3",
+    "vehiculos_contados": 2,
+    "intervalo_segundos": 30,
+    "timestamp_inicio": "2026-04-08T08:20:00",
+    "timestamp_fin": "2026-04-08T08:20:30"
+  },
+  {
+    "sensor_id": "GPS-C3",
+    "tipo_sensor": "gps",
+    "interseccion": "INT-C3",
+    "nivel_congestion": "ALTA",
+    "velocidad_promedio": 46,
+    "densidad": 9,
+    "timestamp": "2026-04-08T08:20:05"
+  }
+]

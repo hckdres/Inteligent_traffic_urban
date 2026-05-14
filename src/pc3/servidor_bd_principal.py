@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+import logging
 from pathlib import Path
 from typing import Any, Dict
 
@@ -12,11 +12,20 @@ PRIMARY_PERSIST_ENDPOINT = "tcp://127.0.0.1:5561"
 PRIMARY_QUERY_ENDPOINT   = "tcp://127.0.0.1:5564"
 PRIMARY_HEALTH_ENDPOINT  = "tcp://127.0.0.1:5563"
 
+logger = logging.getLogger("pc3_db")
+
 
 class ServidorBDPrincipal:
     def __init__(self, ruta_db: str = "data/traffic_primary.db") -> None:
         self.repo = RepositorioSQLite(ruta_db)
         self._seed_hecho = False
+        
+        log_dir = Path("logs")
+        log_dir.mkdir(exist_ok=True)
+        file_handler = logging.FileHandler(log_dir / "pc3_db.log", encoding='utf-8')
+        file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+        logger.addHandler(file_handler)
+        logger.setLevel(logging.INFO)
 
         self.context = zmq.Context.instance()
 
@@ -33,7 +42,7 @@ class ServidorBDPrincipal:
         if not self._seed_hecho:
             self.repo.seed_desde_config(config)
             self._seed_hecho = True
-            print("[BD_PRINCIPAL] catálogos inicializados desde config")
+            logger.info("[BD_PRINCIPAL] catálogos inicializados desde config")
 
     def iniciar(self) -> None:
         poller = zmq.Poller()
@@ -41,7 +50,7 @@ class ServidorBDPrincipal:
         poller.register(self.rep_socket, zmq.POLLIN)
         poller.register(self.health_socket, zmq.POLLIN)
 
-        print("[BD_PRINCIPAL] lista")
+        logger.info("[BD_PRINCIPAL] lista")
         while True:
             eventos = dict(poller.poll())
             if self.pull_socket in eventos:
@@ -59,7 +68,7 @@ class ServidorBDPrincipal:
         try:
             if tipo == "guardar_decision":
                 self.repo.guardar_decision(payload)
-                print(f"[BD_PRINCIPAL] decision guardada: {payload.get('interseccion')} {payload.get('estado_circulacion')}")
+                logger.debug(f"[BD_PRINCIPAL] decision guardada: {payload.get('interseccion')} {payload.get('estado_circulacion')}")
             elif tipo == "guardar_solicitud":
                 self.repo.guardar_solicitud(payload)
             elif tipo == "registrar_failover":
@@ -69,7 +78,7 @@ class ServidorBDPrincipal:
             elif tipo == "seed":
                 self.seed(payload)
         except Exception as exc:
-            print(f"[BD_PRINCIPAL] error en persistencia tipo={tipo}: {exc}")
+            logger.error(f"[BD_PRINCIPAL] error en persistencia tipo={tipo}: {exc}")
 
     def _guardar_evento_sensor(self, payload: Dict[str, Any]) -> None:
         tipo_sensor = payload.get("tipo_sensor")
@@ -91,6 +100,11 @@ class ServidorBDPrincipal:
                     consulta["fecha_inicio"], consulta["fecha_fin"]
                 )
                 return {"ok": True, "data": data}
+            if tipo in ("consultar_evento_seq", "consultar_sensor_seq"):
+                data = self.repo.consultar_evento_seq(
+                    int(consulta["seq"]), int(consulta.get("limite", 50))
+                )
+                return {"ok": bool(data), "data": data}
             if tipo == "contar_filas":
                 return {"ok": True, "data": self.repo.contar_filas()}
             return {"ok": False, "error": f"consulta no soportada: {tipo}"}

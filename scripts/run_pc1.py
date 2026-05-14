@@ -12,6 +12,7 @@ import argparse
 import os
 import sys
 import threading
+from datetime import datetime
 
 # Permitir imports desde la raíz del proyecto
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,17 +20,38 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import json
 from src.pc1.broker_zmq import main as broker_simple
 from src.pc1.broker_zmq_multihilo import BrokerMultihilo
-from src.pc1.sensor_camara import SensorCamara
-from src.pc1.sensor_espira import SensorEspira
-from src.pc1.sensor_gps import SensorGPS
+from src.pc1.main_pc1 import cargar_sensores_desde_config
+from src.pc1.secuenciador_eventos import SecuenciadorEventos
 from src.messaging.zmq_publisher import ZMQPublisher
+from src.utils.timezones import COLOMBIA_TZ
 
 
-def publicar_eventos_sensor(sensor, publisher: ZMQPublisher) -> None:
+def _hora_colombia() -> str:
+    return datetime.now(COLOMBIA_TZ).strftime("%H:%M:%S")
+
+
+def publicar_eventos_sensor(
+    sensor,
+    publisher: ZMQPublisher,
+    secuenciador: SecuenciadorEventos,
+    stop_event: threading.Event,
+) -> None:
     for evento in sensor.generar_eventos():
-        topico = evento.pop("topico")
-        publisher.publicar(topico, evento)
-        print(f"[PC1][{sensor.sensor_id}] -> topico='{topico}' interseccion={evento.get('interseccion')}")
+        if stop_event.is_set():
+            break
+        try:
+            evento["seq"] = secuenciador.siguiente()
+            topico = evento.pop("topico")
+            publisher.publicar(topico, evento)
+            print(
+                f"[{_hora_colombia()}][PC1][seq={evento['seq']}][{sensor.sensor_id}] "
+                f"topico='{topico}' interseccion={evento.get('interseccion')} "
+                f"ts={evento.get('timestamp') or evento.get('timestamp_fin')}"
+            )
+        except Exception as exc:
+            print(f"[PC1][ERROR][{sensor.sensor_id}] {exc}")
+            if stop_event.is_set():
+                break
 
 
 def main(pc2_ip: str, multihilo: bool) -> None:
@@ -52,35 +74,29 @@ def main(pc2_ip: str, multihilo: bool) -> None:
     print(f"[PC1] Broker {'multihilo' if multihilo else 'simple'} iniciado")
 
     publisher = ZMQPublisher(broker_endpoint_local)
-
-    sensores = [
-        SensorCamara("CAM-A1", "INT-A1", intervalo_segundos=2),
-        SensorEspira("ESP-A1", "INT-A1", intervalo_segundos=2),
-        SensorGPS   ("GPS-A1", "INT-A1", intervalo_segundos=2),
-
-        SensorCamara("CAM-B2", "INT-B2", intervalo_segundos=2),
-        SensorEspira("ESP-B2", "INT-B2", intervalo_segundos=2),
-        SensorGPS   ("GPS-B2", "INT-B2", intervalo_segundos=2),
-
-        SensorCamara("CAM-C3", "INT-C3", intervalo_segundos=2),
-        SensorEspira("ESP-C3", "INT-C3", intervalo_segundos=2),
-        SensorGPS   ("GPS-C3", "INT-C3", intervalo_segundos=2),
-    ]
+    secuenciador = SecuenciadorEventos()
+    stop_event = threading.Event()
+    sensores = cargar_sensores_desde_config()
 
     hilos = []
     for sensor in sensores:
         hilo = threading.Thread(
             target=publicar_eventos_sensor,
-            args=(sensor, publisher),
-            daemon=True,
+            args=(sensor, publisher, secuenciador, stop_event),
             name=f"sensor-{sensor.sensor_id}",
         )
         hilo.start()
         hilos.append(hilo)
 
     print(f"[PC1] {len(sensores)} sensores activos")
-    for hilo in hilos:
-        hilo.join()
+    try:
+        for hilo in hilos:
+            hilo.join()
+    except KeyboardInterrupt:
+        print("[PC1] Deteniendo captura...")
+        stop_event.set()
+    finally:
+        secuenciador.flush()
 
 
 if __name__ == "__main__":

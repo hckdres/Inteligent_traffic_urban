@@ -77,21 +77,87 @@
       "sensor_id": "CAM-A1",
       "tipo_sensor": "camara",
       "interseccion": "INT-A1",
-      "intervalo_segundos": 10,
+      "intervalo_segundos": 2,
       "modo": "archivo_json"
     },
     {
       "sensor_id": "ESP-A1",
       "tipo_sensor": "espira_inductiva",
       "interseccion": "INT-A1",
-      "intervalo_segundos": 10,
+      "intervalo_segundos": 2,
       "modo": "archivo_json"
     },
     {
       "sensor_id": "GPS-A1",
       "tipo_sensor": "gps",
       "interseccion": "INT-A1",
-      "intervalo_segundos": 10,
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+
+    {
+      "sensor_id": "CAM-A2",
+      "tipo_sensor": "camara",
+      "interseccion": "INT-A2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "ESP-A2",
+      "tipo_sensor": "espira_inductiva",
+      "interseccion": "INT-A2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "GPS-A2",
+      "tipo_sensor": "gps",
+      "interseccion": "INT-A2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+
+    {
+      "sensor_id": "CAM-A3",
+      "tipo_sensor": "camara",
+      "interseccion": "INT-A3",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "ESP-A3",
+      "tipo_sensor": "espira_inductiva",
+      "interseccion": "INT-A3",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "GPS-A3",
+      "tipo_sensor": "gps",
+      "interseccion": "INT-A3",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+
+    {
+      "sensor_id": "CAM-B1",
+      "tipo_sensor": "camara",
+      "interseccion": "INT-B1",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "ESP-B1",
+      "tipo_sensor": "espira_inductiva",
+      "interseccion": "INT-B1",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "GPS-B1",
+      "tipo_sensor": "gps",
+      "interseccion": "INT-B1",
+      "intervalo_segundos": 2,
       "modo": "archivo_json"
     },
 
@@ -99,21 +165,87 @@
       "sensor_id": "CAM-B2",
       "tipo_sensor": "camara",
       "interseccion": "INT-B2",
-      "intervalo_segundos": 10,
+      "intervalo_segundos": 2,
       "modo": "archivo_json"
     },
     {
       "sensor_id": "ESP-B2",
       "tipo_sensor": "espira_inductiva",
       "interseccion": "INT-B2",
-      "intervalo_segundos": 10,
+      "intervalo_segundos": 2,
       "modo": "archivo_json"
     },
     {
       "sensor_id": "GPS-B2",
       "tipo_sensor": "gps",
       "interseccion": "INT-B2",
-      "intervalo_segundos": 10,
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+
+    {
+      "sensor_id": "CAM-B3",
+      "tipo_sensor": "camara",
+      "interseccion": "INT-B3",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "ESP-B3",
+      "tipo_sensor": "espira_inductiva",
+      "interseccion": "INT-B3",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "GPS-B3",
+      "tipo_sensor": "gps",
+      "interseccion": "INT-B3",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+
+    {
+      "sensor_id": "CAM-C1",
+      "tipo_sensor": "camara",
+      "interseccion": "INT-C1",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "ESP-C1",
+      "tipo_sensor": "espira_inductiva",
+      "interseccion": "INT-C1",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "GPS-C1",
+      "tipo_sensor": "gps",
+      "interseccion": "INT-C1",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+
+    {
+      "sensor_id": "CAM-C2",
+      "tipo_sensor": "camara",
+      "interseccion": "INT-C2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "ESP-C2",
+      "tipo_sensor": "espira_inductiva",
+      "interseccion": "INT-C2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "GPS-C2",
+      "tipo_sensor": "gps",
+      "interseccion": "INT-C2",
+      "intervalo_segundos": 2,
       "modo": "archivo_json"
     },
 
@@ -121,21 +253,21 @@
       "sensor_id": "CAM-C3",
       "tipo_sensor": "camara",
       "interseccion": "INT-C3",
-      "intervalo_segundos": 10,
+      "intervalo_segundos": 2,
       "modo": "archivo_json"
     },
     {
       "sensor_id": "ESP-C3",
       "tipo_sensor": "espira_inductiva",
       "interseccion": "INT-C3",
-      "intervalo_segundos": 10,
+      "intervalo_segundos": 2,
       "modo": "archivo_json"
     },
     {
       "sensor_id": "GPS-C3",
       "tipo_sensor": "gps",
       "interseccion": "INT-C3",
-      "intervalo_segundos": 10,
+      "intervalo_segundos": 2,
       "modo": "archivo_json"
     }
   ],

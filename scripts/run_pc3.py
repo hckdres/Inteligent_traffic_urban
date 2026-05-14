@@ -42,8 +42,24 @@ def main(pc2_ip: str) -> None:
     print(f"[PC3]   REQ -> analítica  : {analitica_cmd}")
     print(f"[PC3]   REQ -> réplica    : {replica_query}")
 
+    bd_principal = ServidorBDPrincipal()
+    
+    # --- Siembra la BD Principal con el archivo de configuración ---
+    import json
+    from pathlib import Path
+    config_path = Path("src/config/system.json")
+    if config_path.exists():
+        try:
+            with config_path.open("r", encoding="utf-8") as f:
+                config = json.load(f)
+            bd_principal.seed(config)
+        except Exception as e:
+            print(f"[PC3] Error sembrando BD principal: {e}")
+    else:
+        print("[PC3] ADVERTENCIA: no se encontró src/config/system.json")
+
     hilo_bd = threading.Thread(
-        target=lambda: ServidorBDPrincipal().iniciar(),
+        target=bd_principal.iniciar,
         daemon=True,
         name="bd-principal",
     )

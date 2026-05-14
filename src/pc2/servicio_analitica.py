@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import yaml
 import zmq
@@ -11,31 +12,62 @@ from rich.panel import Panel
 from rich.text import Text
 from rich import box
 
+from src.dominio.evento_trafico import EventoCamara, EventoEspira, EventoGPS, EventoTrafico
 from src.dominio.regla_trafico import ReglaTrafico, seleccionar_mejor_regla
+from src.enums.accion_semaforo import AccionSemaforo
+from src.enums.estado_circulacion import EstadoCirculacion
 from src.pc2.control_semaforos import ControlSemaforos
 from src.pc2.gestor_failover import GestorFailover
 from src.pc2.health_check import HealthCheckPC3
+from src.utils.timezones import COLOMBIA_TZ
 
 
 PC2_PULL_ENDPOINT = "tcp://127.0.0.1:5557"
 ANALITICA_COMMAND_ENDPOINT = "tcp://127.0.0.1:5562"
 
 
+def _ts_colombia(valor: str | None) -> str | None:
+    if not valor:
+        return None
+    texto = valor[:-1] + "+00:00" if valor.endswith("Z") else valor
+    try:
+        dt = datetime.fromisoformat(texto)
+    except ValueError:
+        return valor
+    if dt.tzinfo is None:
+        return valor
+    return dt.astimezone(COLOMBIA_TZ).isoformat()
+
+
 class ServicioAnalitica:
-    def __init__(self, ruta_reglas: str = "config/rules.yaml") -> None:
+    def __init__(
+        self,
+        ruta_reglas: str = "config/rules.yaml",
+        ruta_config_sistema: str = "src/config/system.json",
+    ) -> None:
         self.ruta_reglas = Path(ruta_reglas)
+        self.ruta_config_sistema = Path(ruta_config_sistema)
         self.reglas = self._cargar_reglas()
+        self.intersecciones_validas = self._cargar_intersecciones_validas()
         self.control_semaforos = ControlSemaforos()
         self.failover = GestorFailover()
 
         self.context = zmq.Context.instance()
         self.pull_socket = self.context.socket(zmq.PULL)
-        self.pull_socket.connect(PC2_PULL_ENDPOINT)
+        self.pull_socket.bind(PC2_PULL_ENDPOINT)
 
         self.rep_socket = self.context.socket(zmq.REP)
         self.rep_socket.bind(ANALITICA_COMMAND_ENDPOINT)
 
+        # Almacena últimos eventos tipados por intersección
+        self._ultimo_cam: Dict[str, EventoCamara] = {}
+        self._ultimo_esp: Dict[str, EventoEspira] = {}
+        self._ultimo_gps: Dict[str, EventoGPS]    = {}
+        # También mantenemos el contexto plano para compatibilidad de persistencia
         self.contextos_por_interseccion: Dict[str, Dict[str, Any]] = {}
+        self._ultima_firma_por_interseccion: Dict[str, tuple[str, str, int, str]] = {}
+        self._prioridades_activas: Dict[str, datetime] = {}
+
         self.console = Console()
         self.healthcheck = HealthCheckPC3(self.failover.actualizar_estado_primaria)
         self.healthcheck.start()
@@ -49,6 +81,13 @@ class ServicioAnalitica:
 
         return [ReglaTrafico.desde_dict(item) for item in data.get("reglas", [])]
 
+    def _cargar_intersecciones_validas(self) -> set[str]:
+        if not self.ruta_config_sistema.exists():
+            return set()
+        with self.ruta_config_sistema.open("r", encoding="utf-8") as archivo:
+            data = json.load(archivo)
+        return set(data.get("ciudad", {}).get("intersecciones", []))
+
     def escuchar_eventos(self) -> None:
         print("[ANALITICA] escuchando eventos y comandos...")
         poller = zmq.Poller()
@@ -60,21 +99,54 @@ class ServicioAnalitica:
             if self.pull_socket in sockets:
                 mensaje = self.pull_socket.recv_string()
                 topico, payload_json = mensaje.split(" ", 1)
-                evento = json.loads(payload_json)
-                decision = self.procesar_evento(topico, evento)
+                evento_dict = json.loads(payload_json)
+                self.console.print(
+                    f"[dim][{datetime.now(COLOMBIA_TZ).strftime('%H:%M:%S')}] "
+                    f"{topico} seq={evento_dict.get('seq')} "
+                    f"sensor={evento_dict.get('sensor_id')} "
+                    f"inter={evento_dict.get('interseccion')} "
+                    f"ts={_ts_colombia(evento_dict.get('timestamp') or evento_dict.get('timestamp_fin'))}[/dim]"
+                )
+                decision = self.procesar_evento(topico, evento_dict)
                 if decision:
                     self.control_semaforos.aplicar_accion(decision)
                     self.failover.persistir_decision(decision)
 
             if self.rep_socket in sockets:
-                solicitud = self.rep_socket.recv_json()
-                respuesta = self.procesar_solicitud_directa(solicitud)
-                self.rep_socket.send_json(respuesta)
+                try:
+                    solicitud = self.rep_socket.recv_json()
+                    respuesta = self.procesar_solicitud_directa(solicitud)
+                    self.rep_socket.send_json(respuesta)
+                except Exception as e:
+                    print(f"[ANALITICA] Error procesando comando externo: {e}")
+                    try:
+                        self.rep_socket.send_json({"ok": False, "error": str(e)})
+                    except:
+                        pass
+
 
     def procesar_evento(self, topico: str, evento: Dict[str, Any]) -> Dict[str, Any] | None:
-        interseccion = evento["interseccion"]
-        contexto = self.contextos_por_interseccion.setdefault(interseccion, {"interseccion": interseccion})
+        interseccion = evento.get("interseccion") or evento.get("interseccionId")
+        if not interseccion:
+            return None
 
+        # --- Actualizar objetos de dominio tipados ---
+        if topico == "camara":
+            evento_obj = self._parsear_evento_camara(evento)
+            self._ultimo_cam[interseccion] = evento_obj
+        elif topico == "espira":
+            evento_obj = self._parsear_evento_espira(evento)
+            self._ultimo_esp[interseccion] = evento_obj
+        elif topico == "gps":
+            evento_obj = self._parsear_evento_gps(evento)
+            self._ultimo_gps[interseccion] = evento_obj
+        else:
+            return None
+
+        self.failover.persistir_evento_sensor(evento)
+
+        # --- Mantener contexto plano para retrocompatibilidad con failover/persistencia ---
+        contexto = self.contextos_por_interseccion.setdefault(interseccion, {"interseccion": interseccion})
         if topico == "camara":
             contexto["cola"] = evento.get("volumen")
             contexto["velocidad_promedio"] = evento.get("velocidad_promedio")
@@ -89,12 +161,22 @@ class ServicioAnalitica:
             contexto["densidad"] = evento.get("densidad")
             contexto["timestamp"] = evento.get("timestamp")
 
-        regla = seleccionar_mejor_regla(self.reglas, contexto)
+        if self._prioridad_activa(interseccion):
+            return None
+
+        # --- Evaluar con objetos tipados si todos los sensores reportaron ---
+        cam = self._ultimo_cam.get(interseccion)
+        esp = self._ultimo_esp.get(interseccion)
+        gps = self._ultimo_gps.get(interseccion)
+
+        regla = seleccionar_mejor_regla(self.reglas, cam, esp, gps, contexto)
+
         if regla is None:
             decision = {
                 "interseccion": interseccion,
-                "estado_circulacion": "SIN_CLASIFICAR",
-                "accion": "SIN_ACCION",
+                "regla_aplicada": "SIN_REGLA",
+                "estado_circulacion": EstadoCirculacion.SIN_CLASIFICAR.value,
+                "accion": AccionSemaforo.SIN_ACCION.value,
                 "duracion_verde_segundos": 15,
                 "contexto": dict(contexto),
                 "origen": "ANALITICA",
@@ -102,19 +184,31 @@ class ServicioAnalitica:
         else:
             decision = {
                 "interseccion": interseccion,
-                "estado_circulacion": regla.resultado.estado_circulacion,
-                "accion": regla.resultado.accion,
-                "duracion_verde_segundos": regla.resultado.duracion_verde_segundos,
-                "regla_aplicada": regla.id,
+                "estado_circulacion": regla.getEstadoResultado().value,
+                "accion": regla.getAccion().value,
+                "duracion_verde_segundos": regla.getExtensionVerde(),
+                "regla_aplicada": regla.reglaId,
                 "contexto": dict(contexto),
                 "origen": "ANALITICA",
             }
 
-        color = "green" if decision["estado_circulacion"] == "NORMAL" else "red" if "CONGESTION" in decision["estado_circulacion"] else "blue"
-        
+        firma = (
+            decision["estado_circulacion"],
+            decision["accion"],
+            decision["duracion_verde_segundos"],
+            decision["regla_aplicada"],
+        )
+        if self._ultima_firma_por_interseccion.get(interseccion) == firma:
+            return None
+        self._ultima_firma_por_interseccion[interseccion] = firma
+
+        color = "green" if decision["estado_circulacion"] == "NORMAL" else \
+                "red" if "CONGESTION" in decision["estado_circulacion"] else "blue"
+
         self.console.print(Panel(
             Text.assemble(
-                ("Intersección: ", "bold"), (decision["interseccion"], "cyan"),
+                ("Hora COL: ", "bold"), (datetime.now(COLOMBIA_TZ).strftime("%H:%M:%S"), "white"),
+                ("\nIntersección: ", "bold"), (decision["interseccion"], "cyan"),
                 ("\nEstado: ", "bold"), (decision["estado_circulacion"], color),
                 ("\nAcción: ", "bold"), (decision["accion"], "bold yellow"),
                 ("\nDuración: ", "bold"), (f"{decision['duracion_verde_segundos']}s", "white")
@@ -131,20 +225,44 @@ class ServicioAnalitica:
         interseccion = solicitud.get("interseccion")
 
         if tipo == "priorizar_via":
+            modo_corredor = str(solicitud.get("modo_corredor", "")).strip().upper()
+            intersecciones_afectadas = self._resolver_corredor_ambulancia(interseccion, modo_corredor)
+            if not intersecciones_afectadas:
+                return {
+                    "ok": False,
+                    "error": "No se pudo construir el corredor. Usa FILA o COLUMNA sobre una intersección válida.",
+                }
             decision = {
                 "interseccion": interseccion,
-                "estado_circulacion": "PRIORIZACION",
-                "accion": "PRIORIZAR_VIA",
+                "estado_circulacion": EstadoCirculacion.PRIORIZACION.value,
+                "accion": AccionSemaforo.OLA_VERDE.value,
                 "duracion_verde_segundos": solicitud.get("duracion_verde_segundos", 20),
-                "regla_aplicada": "MANUAL",
-                "contexto": {"timestamp": solicitud.get("timestamp"), "detalle": solicitud.get("detalle")},
+                "regla_aplicada": f"MANUAL_AMBULANCIA_{modo_corredor}",
+                "contexto": {
+                    "timestamp": solicitud.get("timestamp"),
+                    "detalle": solicitud.get("detalle"),
+                    "modo_corredor": modo_corredor,
+                    "motivo": "AMBULANCIA",
+                    "intersecciones_corredor": intersecciones_afectadas,
+                    "prioridad_hasta": (
+                        datetime.now(timezone.utc)
+                        + timedelta(seconds=int(solicitud.get("duracion_verde_segundos", 20)))
+                    ).isoformat(timespec="seconds"),
+                },
+                "intersecciones_afectadas": intersecciones_afectadas,
                 "origen": "MANUAL",
             }
+            self._registrar_prioridad(decision)
         elif tipo == "cambio_manual":
+            accion_str = solicitud.get("accion", "CAMBIAR_A_VERDE")
+            try:
+                accion = AccionSemaforo(accion_str)
+            except ValueError:
+                accion = AccionSemaforo.CAMBIAR_A_VERDE
             decision = {
                 "interseccion": interseccion,
-                "estado_circulacion": "PRIORIZACION",
-                "accion": solicitud.get("accion", "CAMBIAR_A_VERDE"),
+                "estado_circulacion": EstadoCirculacion.PRIORIZACION.value,
+                "accion": accion.value,
                 "duracion_verde_segundos": solicitud.get("duracion_verde_segundos", 15),
                 "regla_aplicada": "MANUAL",
                 "contexto": {"timestamp": solicitud.get("timestamp"), "detalle": solicitud.get("detalle")},
@@ -155,12 +273,109 @@ class ServicioAnalitica:
 
         self.control_semaforos.aplicar_accion(decision)
         self.failover.persistir_decision(decision)
-        self.failover.registrar_solicitud(
-            {
-                "tipo_solicitud": tipo.upper(),
-                "interseccion": interseccion,
-                "detalle": solicitud.get("detalle"),
-                "resultado_resumen": f"Acción ejecutada: {decision['accion']}",
-            }
-        )
+        self.failover.registrar_solicitud({
+            "tipo_solicitud": tipo.upper(),
+            "interseccion": interseccion,
+            "detalle": solicitud.get("detalle"),
+            "resultado_resumen": self._resumen_solicitud(decision),
+        })
         return {"ok": True, "decision": decision}
+
+    def _resolver_corredor_ambulancia(
+        self, interseccion: str | None, modo_corredor: str
+    ) -> List[str]:
+        if not interseccion or interseccion not in self.intersecciones_validas:
+            return []
+        if modo_corredor not in {"FILA", "COLUMNA"}:
+            return []
+
+        fila, columna = self._descomponer_interseccion(interseccion)
+        candidatos: List[tuple[str, int, int]] = []
+        for codigo in self.intersecciones_validas:
+            fila_actual, columna_actual = self._descomponer_interseccion(codigo)
+            if modo_corredor == "FILA" and fila_actual == fila:
+                candidatos.append((codigo, fila_actual, columna_actual))
+            elif modo_corredor == "COLUMNA" and columna_actual == columna:
+                candidatos.append((codigo, fila_actual, columna_actual))
+
+        if modo_corredor == "FILA":
+            candidatos.sort(key=lambda item: item[2])
+        else:
+            candidatos.sort(key=lambda item: item[1])
+        return [codigo for codigo, _, _ in candidatos]
+
+    @staticmethod
+    def _descomponer_interseccion(interseccion: str) -> tuple[str, int]:
+        sufijo = interseccion.split("-", 1)[1]
+        return sufijo[0], int(sufijo[1:])
+
+    @staticmethod
+    def _resumen_solicitud(decision: Dict[str, Any]) -> str:
+        afectadas = decision.get("intersecciones_afectadas", [])
+        if afectadas:
+            return f"Acción ejecutada: {decision['accion']} sobre {', '.join(afectadas)}"
+        return f"Acción ejecutada: {decision['accion']}"
+
+    def _registrar_prioridad(self, decision: Dict[str, Any]) -> None:
+        intersecciones = decision.get("intersecciones_afectadas") or [decision["interseccion"]]
+        expira_en = datetime.now(timezone.utc) + timedelta(
+            seconds=int(decision.get("duracion_verde_segundos", 20))
+        )
+        for codigo in intersecciones:
+            self._prioridades_activas[codigo] = expira_en
+
+    def _prioridad_activa(self, interseccion: str) -> bool:
+        expira_en = self._prioridades_activas.get(interseccion)
+        if expira_en is None:
+            return False
+        if datetime.now(timezone.utc) >= expira_en:
+            self._prioridades_activas.pop(interseccion, None)
+            return False
+        return True
+
+    # ----- Helpers privados de parseo -----
+
+    def _parsear_evento_camara(self, d: Dict[str, Any]) -> EventoCamara:
+        from src.enums.tipo_sensor import TipoSensor
+        import uuid
+        return EventoCamara(
+            eventoId=d.get("eventoId", str(uuid.uuid4())),
+            sensorId=d.get("sensor_id", ""),
+            interseccionId=d.get("interseccion", ""),
+            tipoSensor=TipoSensor.CAMARA,
+            timestamp=datetime.now(timezone.utc),
+            volumen=int(d.get("volumen", 0)),
+            velocidadPromedio=float(d.get("velocidad_promedio", 0.0)),
+        )
+
+    def _parsear_evento_espira(self, d: Dict[str, Any]) -> EventoEspira:
+        from src.enums.tipo_sensor import TipoSensor
+        import uuid
+        ts = datetime.now(timezone.utc)
+        return EventoEspira(
+            eventoId=d.get("eventoId", str(uuid.uuid4())),
+            sensorId=d.get("sensor_id", ""),
+            interseccionId=d.get("interseccion", ""),
+            tipoSensor=TipoSensor.ESPIRA_INDUCTIVA,
+            timestamp=ts,
+            vehiculosContados=int(d.get("vehiculos_contados", 0)),
+            intervaloSegundos=int(d.get("intervalo_segundos", 30)),
+        )
+
+    def _parsear_evento_gps(self, d: Dict[str, Any]) -> EventoGPS:
+        from src.enums.tipo_sensor import TipoSensor
+        from src.enums.nivel_congestion import NivelCongestion
+        import uuid
+        try:
+            nivel = NivelCongestion(d.get("nivel_congestion", "NORMAL"))
+        except ValueError:
+            nivel = NivelCongestion.NORMAL
+        return EventoGPS(
+            eventoId=d.get("eventoId", str(uuid.uuid4())),
+            sensorId=d.get("sensor_id", ""),
+            interseccionId=d.get("interseccion", ""),
+            tipoSensor=TipoSensor.GPS,
+            timestamp=datetime.now(timezone.utc),
+            velocidadPromedio=float(d.get("velocidad_promedio", 0.0)),
+            nivelCongestion=nivel,
+        )
