@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 
 from src.persistence.repositorio_json import RepositorioJSON
 from src.enums.tipo_sensor import TipoSensor
+from src.utils.intersecciones import descomponer_interseccion, fila_a_indice
 from src.utils.timezones import COLOMBIA_TZ
 
 
@@ -69,7 +70,7 @@ class SensorBase(ABC):
 
     def _generar_eventos_sinteticos(self) -> List[Dict[str, Any]]:
         fila, columna = self._descomponer_interseccion()
-        offset = (ord(fila) - ord("A")) * 3 + (columna - 1)
+        offset = (fila_a_indice(fila) - 1) * 10 + (columna - 1)
 
         plantillas = {
             "camara": [
@@ -116,5 +117,4 @@ class SensorBase(ABC):
         return eventos
 
     def _descomponer_interseccion(self) -> tuple[str, int]:
-        sufijo = self.interseccion.split("-", 1)[1]
-        return sufijo[0], int(sufijo[1:])
+        return descomponer_interseccion(self.interseccion)

@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.utils.intersecciones import descomponer_interseccion
+
 
 _SCHEMA = Path(__file__).parent.parent.parent / "data" / "schema.sql"
 _MAX_ROWS_DISPLAY = 50   # límite para consultas de monitoreo
@@ -79,8 +81,7 @@ class RepositorioSQLite:
         with self._conn() as conn:
             # Intersecciones
             for codigo in config.get("ciudad", {}).get("intersecciones", []):
-                fila = codigo.split("-")[1][0]          # "INT-A1" -> "A"
-                columna = int(codigo.split("-")[1][1:]) # "INT-A1" -> 1
+                fila, columna = descomponer_interseccion(codigo)
                 conn.execute(
                     "INSERT OR IGNORE INTO interseccion (codigo, fila, columna) VALUES (?,?,?)",
                     (codigo, fila, columna),
@@ -376,7 +377,7 @@ class RepositorioSQLite:
         with self._conn() as conn:
             fila = conn.execute(
                 """SELECT i.codigo, et.ts_estado, et.clasificacion,
-                          et.regla_aplicada, et.longitud_cola,
+                          et.regla_aplicada, et.longitud_cola, et.conteo_vehicular,
                           et.velocidad_promedio, et.densidad_trafico,
                           s.estado_actual, s.duracion_base_seg,
                           (

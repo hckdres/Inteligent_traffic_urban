@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 import time
 from datetime import datetime
@@ -20,11 +21,16 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.utils.timezones import COLOMBIA_TZ
+from src.utils.intersecciones import (
+    descomponer_interseccion as descomponer_interseccion_cfg,
+    fila_a_indice,
+)
 
 
 PRIMARY_QUERY_ENDPOINT = "tcp://127.0.0.1:5564"
 REPLICA_QUERY_ENDPOINT = "tcp://127.0.0.1:5565"
 DEFAULT_INTERVAL_SECONDS = 1.0
+AMBULANCIA_STEP_SECONDS = 1.1
 
 
 def cargar_intersecciones() -> Tuple[List[str], int, int]:
@@ -119,30 +125,191 @@ def formatear_timestamp(valor: Any) -> str:
         return str(valor)
 
 
-def construir_panel(interseccion: str, respuesta: Dict[str, Any]) -> Panel:
+def descomponer_interseccion(codigo: str) -> Tuple[str, int] | None:
+    try:
+        return descomponer_interseccion_cfg(codigo)
+    except ValueError:
+        return None
+
+
+def calcular_dimensiones_grid(
+    total_intersecciones: int, filas_config: int, columnas_config: int
+) -> Tuple[int, int]:
+    filas = max(0, filas_config)
+    columnas = max(0, columnas_config)
+
+    if total_intersecciones <= 0:
+        return max(1, filas or 1), max(1, columnas or 1)
+
+    if filas == 0 and columnas == 0:
+        columnas = max(1, int(math.ceil(math.sqrt(total_intersecciones))))
+        filas = int(math.ceil(total_intersecciones / columnas))
+    elif filas == 0:
+        columnas = max(1, columnas)
+        filas = int(math.ceil(total_intersecciones / columnas))
+    elif columnas == 0:
+        filas = max(1, filas)
+        columnas = int(math.ceil(total_intersecciones / filas))
+
+    if filas * columnas < total_intersecciones:
+        filas = int(math.ceil(total_intersecciones / columnas))
+
+    return max(1, filas), max(1, columnas)
+
+
+def ordenar_intersecciones_corredor(codigos: List[str]) -> List[str]:
+    if len(codigos) <= 1:
+        return list(codigos)
+
+    try:
+        descompuestas = [
+            (codigo, *descomponer_interseccion_cfg(codigo))
+            for codigo in codigos
+        ]
+    except ValueError:
+        return sorted(codigos)
+
+    filas = {fila for _, fila, _ in descompuestas}
+    columnas = {columna for _, _, columna in descompuestas}
+    if len(filas) == 1:
+        descompuestas.sort(key=lambda item: item[2])
+    elif len(columnas) == 1:
+        descompuestas.sort(key=lambda item: fila_a_indice(item[1]))
+    else:
+        descompuestas.sort(key=lambda item: (fila_a_indice(item[1]), item[2]))
+    return [codigo for codigo, _, _ in descompuestas]
+
+
+def construir_ruta_desde_origen(
+    corredor: List[str], origen: str | None, direccion: str | None
+) -> List[str]:
+    ordenados = ordenar_intersecciones_corredor(corredor)
+    if not origen or origen not in ordenados:
+        return ordenados
+    indice_origen = ordenados.index(origen)
+    if direccion == "ATRAS":
+        return list(reversed(ordenados[:indice_origen + 1]))
+    return ordenados[indice_origen:]
+
+
+def extraer_metadatos_ambulancia(regla_aplicada: str) -> Tuple[str | None, str | None]:
+    if not regla_aplicada.startswith("MANUAL_AMBULANCIA_"):
+        return None, None
+    tokens = regla_aplicada.split("_")
+    direccion = next((token for token in tokens if token in {"ADELANTE", "ATRAS"}), None)
+    origen = next((token for token in tokens if token.startswith("INT-")), None)
+    return origen, direccion
+
+
+def sumar_ambulancia_a_conteo(conteo_base: Any, amb_en_paso: bool) -> str:
+    if not amb_en_paso:
+        return str(conteo_base if conteo_base is not None else "N/A")
+    if conteo_base in (None, "", "N/A"):
+        return "1 (AMB)"
+    try:
+        return f"{int(conteo_base) + 1} (AMB)"
+    except (TypeError, ValueError):
+        return f"{conteo_base} +1 AMB"
+
+
+def calcular_intersecciones_cercanas(
+    interseccion_ambulancia: str | None, intersecciones: List[str]
+) -> set[str]:
+    if not interseccion_ambulancia:
+        return set()
+    origen = descomponer_interseccion(interseccion_ambulancia)
+    if origen is None:
+        return set()
+    fila_origen, col_origen = origen
+    cercanas: set[str] = set()
+    for codigo in intersecciones:
+        destino = descomponer_interseccion(codigo)
+        if destino is None:
+            continue
+        fila_destino, col_destino = destino
+        distancia_manhattan = abs(fila_a_indice(fila_destino) - fila_a_indice(fila_origen)) + abs(col_destino - col_origen)
+        if distancia_manhattan == 1:
+            cercanas.add(codigo)
+    return cercanas
+
+
+class EstadoAmbulanciaVisual:
+    def __init__(self, paso_segundos: float = AMBULANCIA_STEP_SECONDS) -> None:
+        self.paso_segundos = paso_segundos
+        self._corredor_actual: Tuple[str, ...] = ()
+        self._indice_actual = 0
+        self._ultimo_avance = 0.0
+        self._recorrido_finalizado = False
+
+    def actualizar(self, corredor: List[str]) -> str | None:
+        corredor_tuple = tuple(corredor)
+        if not corredor_tuple:
+            self._corredor_actual = ()
+            self._indice_actual = 0
+            self._ultimo_avance = 0.0
+            self._recorrido_finalizado = False
+            return None
+
+        ahora = time.monotonic()
+        if corredor_tuple != self._corredor_actual:
+            self._corredor_actual = corredor_tuple
+            self._indice_actual = 0
+            self._ultimo_avance = ahora
+            self._recorrido_finalizado = False
+            return self._corredor_actual[0]
+
+        if self._recorrido_finalizado:
+            return None
+
+        if (ahora - self._ultimo_avance) >= self.paso_segundos:
+            self._indice_actual += 1
+            self._ultimo_avance = ahora
+            if self._indice_actual >= len(self._corredor_actual):
+                self._recorrido_finalizado = True
+                return None
+
+        return self._corredor_actual[self._indice_actual]
+
+
+def construir_panel(
+    interseccion: str,
+    respuesta: Dict[str, Any],
+    interseccion_ambulancia: str | None = None,
+    intersecciones_corredor: set[str] | None = None,
+    intersecciones_cercanas: set[str] | None = None,
+) -> Panel:
+    corredor = intersecciones_corredor or set()
+    cercanas = intersecciones_cercanas or set()
     ahora = datetime.now(COLOMBIA_TZ).strftime("%H:%M:%S")
     fuente = respuesta.get("fuente", "UNKNOWN")
+    amb_en_paso = interseccion == interseccion_ambulancia
+    en_corredor = interseccion in corredor
 
     if not respuesta.get("ok") or not respuesta.get("data"):
         estado = "SIN_CONEXION" if respuesta.get("error") else "SIN_EVENTOS"
         accion = "REVISAR_SERVICIO" if respuesta.get("error") else "PENDIENTE"
         fuente = "SIN_CONEXION" if respuesta.get("error") else fuente
-        contenido = Text.assemble(
-            ("Hora COL: ", "bold"),
-            (ahora, "white"),
-            ("\nIntersección: ", "bold"),
-            (interseccion, "cyan"),
-            ("\nEstado: ", "bold"),
-            (estado, "bright_black"),
-            ("\nAcción: ", "bold"),
-            (accion, "yellow"),
-            ("\nFuente: ", "bold"),
-            (fuente, "magenta"),
-        )
+        lineas = [
+            Text.assemble(("Hora COL: ", "bold"), (ahora, "white")),
+            Text.assemble(("Intersección: ", "bold"), (interseccion, "cyan")),
+            Text.assemble(("Estado: ", "bold"), (estado, "bright_black")),
+            Text.assemble(("Acción: ", "bold"), (accion, "yellow")),
+            Text.assemble(("Fuente: ", "bold"), (fuente, "magenta")),
+        ]
+
+        if amb_en_paso:
+            lineas.insert(2, Text.assemble(("Ambulancia: ", "bold"), ("AMB EN PASO", "bold black on bright_yellow")))
+        elif en_corredor:
+            lineas.insert(2, Text.assemble(("Corredor AMB: ", "bold"), ("DESPEJADO", "bold green")))
+        elif interseccion in cercanas:
+            lineas.insert(2, Text.assemble(("Cruce cercano: ", "bold"), ("ALTO TEMPORAL", "bold red")))
+
+        contenido = Group(*lineas)
+        border_style = "bright_yellow" if amb_en_paso else "bright_black"
         return Panel(
             contenido,
             title="Decisión de Tráfico",
-            border_style="bright_black",
+            border_style=border_style,
         )
 
     data = respuesta["data"]
@@ -152,6 +319,7 @@ def construir_panel(interseccion: str, respuesta: Dict[str, Any]) -> Panel:
     duracion = f"{data.get('duracion_base_seg', 'N/A')}s"
     ultimo_comando = str(data.get("ultimo_comando") or "SIN_COMANDO")
     cola = str(data.get("longitud_cola", "N/A"))
+    conteo = sumar_ambulancia_a_conteo(data.get("conteo_vehicular"), amb_en_paso)
     velocidad = str(data.get("velocidad_promedio", "N/A"))
     densidad = str(data.get("densidad_trafico", "N/A"))
     ts_estado = formatear_timestamp(data.get("ts_estado"))
@@ -167,6 +335,7 @@ def construir_panel(interseccion: str, respuesta: Dict[str, Any]) -> Panel:
         Text.assemble(("Duración: ", "bold"), (duracion, "white")),
         Text.assemble(("Regla: ", "bold"), (regla, "white")),
         Text.assemble(("Cola: ", "bold"), (cola, "white")),
+        Text.assemble(("Conteo: ", "bold"), (conteo, "white")),
         Text.assemble(("Velocidad: ", "bold"), (velocidad, "white")),
         Text.assemble(("Densidad: ", "bold"), (densidad, "white")),
         Text.assemble(("Actualizado: ", "bold"), (ts_estado, "white")),
@@ -178,6 +347,14 @@ def construir_panel(interseccion: str, respuesta: Dict[str, Any]) -> Panel:
             5,
             Text.assemble(("Prioridad restante: ", "bold"), (f"{prioridad_restante}s", "bold yellow")),
         )
+
+    if amb_en_paso:
+        lineas.insert(4, Text.assemble(("Ambulancia: ", "bold"), ("AMB EN PASO", "bold black on bright_yellow")))
+        color = "bright_yellow"
+    elif en_corredor:
+        lineas.insert(4, Text.assemble(("Corredor AMB: ", "bold"), ("DESPEJADO", "bold green")))
+    elif interseccion in cercanas:
+        lineas.insert(4, Text.assemble(("Cruce cercano: ", "bold"), ("ALTO TEMPORAL", "bold red")))
 
     contenido = Group(*lineas)
 
@@ -202,7 +379,35 @@ def calcular_prioridad_restante(data: Dict[str, Any]) -> int | None:
         return None
 
 
-def construir_layout(intersecciones: List[str], consultor: ConsultorEstado, filas: int, columnas: int) -> Layout:
+def _detectar_corredor_prioritario(
+    intersecciones: List[str], respuestas: Dict[str, Dict[str, Any]]
+) -> List[str]:
+    corredor: List[str] = []
+    origen: str | None = None
+    direccion: str | None = None
+    for interseccion in intersecciones:
+        respuesta = respuestas.get(interseccion, {})
+        data = respuesta.get("data") if respuesta.get("ok") else None
+        if not data:
+            continue
+        if str(data.get("clasificacion")) != "PRIORIZACION":
+            continue
+        restante = calcular_prioridad_restante(data)
+        if restante is not None and restante <= 0:
+            continue
+        corredor.append(interseccion)
+        if origen is None:
+            origen, direccion = extraer_metadatos_ambulancia(str(data.get("regla_aplicada") or ""))
+    return construir_ruta_desde_origen(corredor, origen, direccion)
+
+
+def construir_layout(
+    intersecciones: List[str],
+    consultor: ConsultorEstado,
+    filas: int,
+    columnas: int,
+    estado_ambulancia: EstadoAmbulanciaVisual,
+) -> Layout:
     layout = Layout(name="root")
     layout.split_column(
         Layout(name="header", size=3),
@@ -217,9 +422,16 @@ def construir_layout(intersecciones: List[str], consultor: ConsultorEstado, fila
     )
     layout["header"].update(Panel(header_text, border_style="blue"))
 
-    filas = max(1, filas or 1)
-    columnas = max(1, columnas or len(intersecciones) or 1)
-    total_celdas = max(len(intersecciones), filas * columnas)
+    total_intersecciones = len(intersecciones)
+    filas, columnas = calcular_dimensiones_grid(total_intersecciones, filas, columnas)
+    total_celdas = filas * columnas
+    respuestas = {
+        interseccion: consultor.consultar_interseccion(interseccion)
+        for interseccion in intersecciones
+    }
+    corredor_activo = _detectar_corredor_prioritario(intersecciones, respuestas)
+    interseccion_ambulancia = estado_ambulancia.actualizar(corredor_activo)
+    intersecciones_cercanas = calcular_intersecciones_cercanas(interseccion_ambulancia, intersecciones)
 
     filas_layout = [Layout(name=f"row_{fila}") for fila in range(filas)]
     layout["grid"].split_column(*filas_layout)
@@ -237,8 +449,16 @@ def construir_layout(intersecciones: List[str], consultor: ConsultorEstado, fila
             continue
 
         interseccion = intersecciones[index]
-        respuesta = consultor.consultar_interseccion(interseccion)
-        layout[nombre_panel].update(construir_panel(interseccion, respuesta))
+        respuesta = respuestas[interseccion]
+        layout[nombre_panel].update(
+            construir_panel(
+                interseccion,
+                respuesta,
+                interseccion_ambulancia=interseccion_ambulancia,
+                intersecciones_corredor=set(corredor_activo),
+                intersecciones_cercanas=intersecciones_cercanas,
+            )
+        )
 
     return layout
 
@@ -268,9 +488,14 @@ def main() -> None:
         raise SystemExit("No se encontraron intersecciones para monitorear.")
 
     consultor = ConsultorEstado()
-    with Live(construir_layout(intersecciones, consultor, filas, columnas), refresh_per_second=4, screen=True) as live:
+    estado_ambulancia = EstadoAmbulanciaVisual()
+    with Live(
+        construir_layout(intersecciones, consultor, filas, columnas, estado_ambulancia),
+        refresh_per_second=4,
+        screen=True,
+    ) as live:
         while True:
-            live.update(construir_layout(intersecciones, consultor, filas, columnas))
+            live.update(construir_layout(intersecciones, consultor, filas, columnas, estado_ambulancia))
             time.sleep(args.interval)
 
 

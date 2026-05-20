@@ -24,9 +24,11 @@ def probar_ambulancia(interseccion_codigo: str):
     payload = {
         "tipo": "priorizar_via",
         "interseccion": interseccion_codigo,
+        "modo_corredor": "FILA",
+        "direccion": "ADELANTE",
         "detalle": f"Ruta prioritaria - Ambulancia {ambulancia.id_vehiculo}",
         "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "duracion_verde_segundos": 30
+        "duracion_verde_segundos": 10
     }
     
     print(f"[TEST] Enviando solicitud a PC2 ({PC3_COMMAND_ENDPOINT})...")

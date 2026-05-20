@@ -19,6 +19,7 @@ from src.enums.estado_circulacion import EstadoCirculacion
 from src.pc2.control_semaforos import ControlSemaforos
 from src.pc2.gestor_failover import GestorFailover
 from src.pc2.health_check import HealthCheckPC3
+from src.utils.intersecciones import descomponer_interseccion, fila_a_indice
 from src.utils.timezones import COLOMBIA_TZ
 
 
@@ -226,27 +227,32 @@ class ServicioAnalitica:
 
         if tipo == "priorizar_via":
             modo_corredor = str(solicitud.get("modo_corredor", "")).strip().upper()
-            intersecciones_afectadas = self._resolver_corredor_ambulancia(interseccion, modo_corredor)
+            direccion = str(solicitud.get("direccion", "ADELANTE")).strip().upper()
+            intersecciones_afectadas = self._resolver_corredor_ambulancia(
+                interseccion, modo_corredor, direccion
+            )
             if not intersecciones_afectadas:
                 return {
                     "ok": False,
-                    "error": "No se pudo construir el corredor. Usa FILA o COLUMNA sobre una intersección válida.",
+                    "error": "No se pudo construir el corredor. Usa FILA o COLUMNA, dirección ADELANTE/ATRAS y una intersección válida.",
                 }
             decision = {
                 "interseccion": interseccion,
                 "estado_circulacion": EstadoCirculacion.PRIORIZACION.value,
                 "accion": AccionSemaforo.OLA_VERDE.value,
-                "duracion_verde_segundos": solicitud.get("duracion_verde_segundos", 20),
-                "regla_aplicada": f"MANUAL_AMBULANCIA_{modo_corredor}",
+                "duracion_verde_segundos": solicitud.get("duracion_verde_segundos", 10),
+                "regla_aplicada": f"MANUAL_AMBULANCIA_{modo_corredor}_{direccion}_{interseccion}",
                 "contexto": {
                     "timestamp": solicitud.get("timestamp"),
                     "detalle": solicitud.get("detalle"),
                     "modo_corredor": modo_corredor,
+                    "direccion": direccion,
                     "motivo": "AMBULANCIA",
+                    "vehiculos_contados": 1,
                     "intersecciones_corredor": intersecciones_afectadas,
                     "prioridad_hasta": (
                         datetime.now(timezone.utc)
-                        + timedelta(seconds=int(solicitud.get("duracion_verde_segundos", 20)))
+                        + timedelta(seconds=int(solicitud.get("duracion_verde_segundos", 10)))
                     ).isoformat(timespec="seconds"),
                 },
                 "intersecciones_afectadas": intersecciones_afectadas,
@@ -282,17 +288,19 @@ class ServicioAnalitica:
         return {"ok": True, "decision": decision}
 
     def _resolver_corredor_ambulancia(
-        self, interseccion: str | None, modo_corredor: str
+        self, interseccion: str | None, modo_corredor: str, direccion: str
     ) -> List[str]:
         if not interseccion or interseccion not in self.intersecciones_validas:
             return []
         if modo_corredor not in {"FILA", "COLUMNA"}:
             return []
+        if direccion not in {"ADELANTE", "ATRAS"}:
+            return []
 
-        fila, columna = self._descomponer_interseccion(interseccion)
+        fila, columna = descomponer_interseccion(interseccion)
         candidatos: List[tuple[str, int, int]] = []
         for codigo in self.intersecciones_validas:
-            fila_actual, columna_actual = self._descomponer_interseccion(codigo)
+            fila_actual, columna_actual = descomponer_interseccion(codigo)
             if modo_corredor == "FILA" and fila_actual == fila:
                 candidatos.append((codigo, fila_actual, columna_actual))
             elif modo_corredor == "COLUMNA" and columna_actual == columna:
@@ -301,13 +309,16 @@ class ServicioAnalitica:
         if modo_corredor == "FILA":
             candidatos.sort(key=lambda item: item[2])
         else:
-            candidatos.sort(key=lambda item: item[1])
-        return [codigo for codigo, _, _ in candidatos]
+            candidatos.sort(key=lambda item: fila_a_indice(item[1]))
 
-    @staticmethod
-    def _descomponer_interseccion(interseccion: str) -> tuple[str, int]:
-        sufijo = interseccion.split("-", 1)[1]
-        return sufijo[0], int(sufijo[1:])
+        ordenados = [codigo for codigo, _, _ in candidatos]
+        if interseccion not in ordenados:
+            return []
+
+        indice_origen = ordenados.index(interseccion)
+        if direccion == "ADELANTE":
+            return ordenados[indice_origen:]
+        return list(reversed(ordenados[:indice_origen + 1]))
 
     @staticmethod
     def _resumen_solicitud(decision: Dict[str, Any]) -> str:
@@ -319,7 +330,7 @@ class ServicioAnalitica:
     def _registrar_prioridad(self, decision: Dict[str, Any]) -> None:
         intersecciones = decision.get("intersecciones_afectadas") or [decision["interseccion"]]
         expira_en = datetime.now(timezone.utc) + timedelta(
-            seconds=int(decision.get("duracion_verde_segundos", 20))
+            seconds=int(decision.get("duracion_verde_segundos", 10))
         )
         for codigo in intersecciones:
             self._prioridades_activas[codigo] = expira_en

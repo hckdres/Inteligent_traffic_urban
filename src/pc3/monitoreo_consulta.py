@@ -12,6 +12,7 @@ from rich.panel import Panel
 from rich.text import Text
 from rich import box
 
+from src.utils.intersecciones import descomponer_interseccion, fila_a_indice
 from src.utils.timezones import COLOMBIA_TZ
 
 
@@ -53,14 +54,16 @@ class MonitoreoConsulta:
             elif opcion == "3":
                 inter = self.console.input("Intersección a priorizar: ").strip()
                 modo_corredor = self.console.input("Corredor ([bold]FILA[/bold]/[bold]COLUMNA[/bold]): ").strip().upper()
+                direccion = self.console.input("Dirección ([bold]ADELANTE[/bold]/[bold]ATRAS[/bold], default ADELANTE): ").strip().upper() or "ADELANTE"
                 detalle = self.console.input("Detalle (ej. Ambulancia en camino): ").strip()
                 res = self.enviar_indicacion({
                     "tipo": "priorizar_via",
                     "interseccion": inter,
                     "modo_corredor": modo_corredor,
+                    "direccion": direccion,
                     "detalle": detalle,
                     "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                    "duracion_verde_segundos": 20,
+                    "duracion_verde_segundos": 10,
                 })
                 self._mostrar_resultado_priorizacion(res)
             elif opcion == "4":
@@ -124,6 +127,7 @@ class MonitoreoConsulta:
 
         decision = res.get("decision", {})
         corredor = decision.get("contexto", {}).get("modo_corredor", "N/A")
+        direccion = decision.get("contexto", {}).get("direccion", "N/A")
         afectadas = decision.get("intersecciones_afectadas", [])
         interseccion = decision.get("interseccion", "N/A")
         duracion = decision.get("duracion_verde_segundos", "N/A")
@@ -134,6 +138,7 @@ class MonitoreoConsulta:
         resumen.add_column("Valor", style="white")
         resumen.add_row("Intersección origen", f"[bold yellow]{interseccion}[/bold yellow]")
         resumen.add_row("Corredor", f"[bold green]{corredor}[/bold green]")
+        resumen.add_row("Dirección", f"[bold cyan]{direccion}[/bold cyan]")
         resumen.add_row("Duración", f"[bold]{duracion}s[/bold]")
         resumen.add_row("Detalle", detalle)
         resumen.add_row("Intersecciones liberadas", ", ".join(afectadas) if afectadas else "Ninguna")
@@ -152,9 +157,7 @@ class MonitoreoConsulta:
 
         filas = {}
         for codigo in intersecciones:
-            sufijo = codigo.split("-", 1)[1]
-            fila = sufijo[0]
-            columna = int(sufijo[1:])
+            fila, columna = descomponer_interseccion(codigo)
             filas.setdefault(fila, {})[columna] = codigo
 
         tabla = Table(title="Mapa del corredor priorizado", box=box.SIMPLE_HEAVY, expand=False)
@@ -164,7 +167,7 @@ class MonitoreoConsulta:
             tabla.add_column(str(columna), justify="center")
 
         afectadas_set = set(afectadas)
-        for fila in sorted(filas):
+        for fila in sorted(filas, key=fila_a_indice):
             celdas = [fila]
             for columna in range(1, total_columnas + 1):
                 codigo = filas.get(fila, {}).get(columna)
