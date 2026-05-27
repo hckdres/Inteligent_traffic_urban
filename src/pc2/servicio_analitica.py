@@ -16,7 +16,6 @@ from src.dominio.evento_trafico import EventoCamara, EventoEspira, EventoGPS, Ev
 from src.dominio.regla_trafico import ReglaTrafico, seleccionar_mejor_regla
 from src.enums.accion_semaforo import AccionSemaforo
 from src.enums.estado_circulacion import EstadoCirculacion
-from src.pc2.control_semaforos import ControlSemaforos
 from src.pc2.gestor_failover import GestorFailover
 from src.pc2.health_check import HealthCheckPC3
 from src.utils.intersecciones import descomponer_interseccion, fila_a_indice
@@ -25,6 +24,7 @@ from src.utils.timezones import COLOMBIA_TZ
 
 PC2_PULL_ENDPOINT = "tcp://127.0.0.1:5557"
 ANALITICA_COMMAND_ENDPOINT = "tcp://127.0.0.1:5562"
+CONTROL_SEMAFOROS_ENDPOINT = "tcp://127.0.0.1:5570"
 
 
 def _ts_colombia(valor: str | None) -> str | None:
@@ -50,7 +50,6 @@ class ServicioAnalitica:
         self.ruta_config_sistema = Path(ruta_config_sistema)
         self.reglas = self._cargar_reglas()
         self.intersecciones_validas = self._cargar_intersecciones_validas()
-        self.control_semaforos = ControlSemaforos()
         self.failover = GestorFailover()
 
         self.context = zmq.Context.instance()
@@ -59,6 +58,9 @@ class ServicioAnalitica:
 
         self.rep_socket = self.context.socket(zmq.REP)
         self.rep_socket.bind(ANALITICA_COMMAND_ENDPOINT)
+
+        self.push_control = self.context.socket(zmq.PUSH)
+        self.push_control.bind(CONTROL_SEMAFOROS_ENDPOINT)
 
         # Almacena últimos eventos tipados por intersección
         self._ultimo_cam: Dict[str, EventoCamara] = {}
@@ -110,7 +112,7 @@ class ServicioAnalitica:
                 )
                 decision = self.procesar_evento(topico, evento_dict)
                 if decision:
-                    self.control_semaforos.aplicar_accion(decision)
+                    self._enviar_a_control(decision)
                     self.failover.persistir_decision(decision)
 
             if self.rep_socket in sockets:
@@ -277,7 +279,7 @@ class ServicioAnalitica:
         else:
             return {"ok": False, "error": f"tipo de solicitud no soportado: {tipo}"}
 
-        self.control_semaforos.aplicar_accion(decision)
+        self._enviar_a_control(decision)
         self.failover.persistir_decision(decision)
         self.failover.registrar_solicitud({
             "tipo_solicitud": tipo.upper(),
@@ -286,6 +288,12 @@ class ServicioAnalitica:
             "resultado_resumen": self._resumen_solicitud(decision),
         })
         return {"ok": True, "decision": decision}
+
+    def _enviar_a_control(self, decision: Dict[str, Any]) -> None:
+        try:
+            self.push_control.send_json(decision)
+        except zmq.ZMQError as exc:
+            raise RuntimeError(f"No se pudo enviar decisión al control de semáforos: {exc}") from exc
 
     def _resolver_corredor_ambulancia(
         self, interseccion: str | None, modo_corredor: str, direccion: str
