@@ -14,9 +14,9 @@
 ## 3) Pruebas puntuales
 - `scripts/testing/test_emergencia.py`: prueba manual de priorización de ambulancia
 
-## 4) Compatibilidad (legacy)
-- `scripts/run_pc1.py`, `scripts/run_pc2.py`, `scripts/run_pc3.py` (wrappers)
-- implementación legacy real en `scripts/launch/legacy/`
+## 4) Estado actual de lanzamiento
+- Lanzamiento oficial por componentes en `scripts/pc1/`, `scripts/pc2/` y `scripts/pc3/`.
+- Los `run_*.py` de la raiz de `scripts/` ya no se usan.
 
 ## Notas
 - `__init__.py` en `src/` y submódulos se conservan porque ayudan a tratar carpetas como paquetes Python (imports estables).

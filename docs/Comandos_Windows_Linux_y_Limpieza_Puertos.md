@@ -100,7 +100,60 @@ Terminal 7:
 python scripts/pc3/run_monitoreo_consulta.py --pc2-ip 127.0.0.1 --analitica-port 5562 --replica-query-port 5565 --primary-ip 127.0.0.1 --primary-query-port 5564
 ```
 
-## 3) Escenario B: ejecucion distribuida (PCs diferentes con IP distinta)
+## 3) Escenario A2: ejecucion unificada (run_pc1.py, run_pc2.py, run_pc3.py)
+
+Este modo lanza cada PC como proceso integrado (sin separar componentes).
+
+### Local (mismo PC, Windows o Linux)
+
+Terminal 1 (PC3):
+```bash
+python scripts/run_pc3.py --pc2-ip 127.0.0.1
+```
+
+Terminal 2 (PC2):
+```bash
+python scripts/run_pc2.py --pc3-ip 127.0.0.1
+```
+
+Terminal 3 (PC1):
+```bash
+python scripts/run_pc1.py --pc2-ip 127.0.0.1
+```
+
+Terminal 3 (PC1 multihilo):
+```bash
+python scripts/run_pc1.py --pc2-ip 127.0.0.1 --multihilo
+```
+
+### Distribuido (IP distintas)
+
+Ejemplo:
+- PC1: `192.168.1.10`
+- PC2: `192.168.1.20`
+- PC3: `192.168.1.30`
+
+En PC3:
+```bash
+python scripts/run_pc3.py --pc2-ip 192.168.1.20
+```
+
+En PC2:
+```bash
+python scripts/run_pc2.py --pc3-ip 192.168.1.30
+```
+
+En PC1:
+```bash
+python scripts/run_pc1.py --pc2-ip 192.168.1.20
+```
+
+En PC1 (multihilo):
+```bash
+python scripts/run_pc1.py --pc2-ip 192.168.1.20 --multihilo
+```
+
+## 4) Escenario B: ejecucion distribuida (PCs diferentes con IP distinta)
 
 Ejemplo de red:
 - PC1 (sensores y broker): `192.168.1.10`
@@ -152,13 +205,6 @@ Terminal 2 (Sensores publicando al broker local):
 python scripts/pc1/run_sensores.py --broker-ip 127.0.0.1 --broker-port 5556
 ```
 
-## 4) Scripts legacy (compatibilidad)
-
-Siguen disponibles:
-- `python scripts/run_pc1.py`
-- `python scripts/run_pc2.py --pc3-ip <IP_PC3>`
-- `python scripts/run_pc3.py --pc2-ip <IP_PC2>`
-
 ## 5) Monitoreo, diagnostico y utilidades
 
 Monitor textual:
@@ -186,7 +232,27 @@ Prueba de emergencia:
 python scripts/testing/test_emergencia.py INT-A1
 ```
 
-## 6) Atajos Windows (.ps1)
+## 6) Logs por PC
+
+Logs que se generan:
+- PC3: `logs/pc3_db.log`
+- PC2 (persistencia/failover): `logs/pc2_persistencia.log`
+- PC1: salida principal en consola (no archivo dedicado por defecto)
+- PC2 replica/control/analitica: salida principal en consola (excepto persistencia/failover)
+
+Ver logs en Linux:
+```bash
+tail -f logs/pc3_db.log
+tail -f logs/pc2_persistencia.log
+```
+
+Ver logs en Windows PowerShell:
+```powershell
+Get-Content .\logs\pc3_db.log -Wait
+Get-Content .\logs\pc2_persistencia.log -Wait
+```
+
+## 7) Atajos Windows (.ps1)
 
 Reiniciar demo:
 ```powershell
@@ -198,7 +264,7 @@ Abrir monitor:
 powershell -ExecutionPolicy Bypass -File .\scripts\ops\windows\abrir_monitor_grid.ps1
 ```
 
-## 7) Mapa de puertos
+## 8) Mapa de puertos
 
 - `5556`: Broker local PC1
 - `5557`: Recepcion de eventos en PC2
