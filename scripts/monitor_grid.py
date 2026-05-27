@@ -324,13 +324,14 @@ def construir_panel(
     densidad = str(data.get("densidad_trafico", "N/A"))
     ts_estado = formatear_timestamp(data.get("ts_estado"))
     color = color_estado(estado)
+    color_semaforo = "green" if accion == "VERDE" else "red" if accion == "ROJO" else "yellow"
     prioridad_restante = calcular_prioridad_restante(data) if estado == "PRIORIZACION" else None
 
     lineas = [
         Text.assemble(("Hora COL: ", "bold"), (ahora, "white")),
         Text.assemble(("Intersección: ", "bold"), (interseccion, "cyan")),
         Text.assemble(("Estado: ", "bold"), (estado, color)),
-        Text.assemble(("Semáforo: ", "bold"), (accion, "bold yellow")),
+        Text.assemble(("Semáforo: ", "bold"), (accion, f"bold {color_semaforo}")),
         Text.assemble(("Último comando: ", "bold"), (ultimo_comando, "white")),
         Text.assemble(("Duración: ", "bold"), (duracion, "white")),
         Text.assemble(("Regla: ", "bold"), (regla, "white")),
@@ -353,6 +354,8 @@ def construir_panel(
         color = "bright_yellow"
     elif en_corredor:
         lineas.insert(4, Text.assemble(("Corredor AMB: ", "bold"), ("DESPEJADO", "bold green")))
+    elif estado == "PRIORIZACION" and accion == "ROJO":
+        lineas.insert(4, Text.assemble(("Bloqueo AMB: ", "bold"), ("ACTIVO", "bold red")))
     elif interseccion in cercanas:
         lineas.insert(4, Text.assemble(("Cruce cercano: ", "bold"), ("ALTO TEMPORAL", "bold red")))
 
@@ -390,7 +393,7 @@ def _detectar_corredor_prioritario(
         data = respuesta.get("data") if respuesta.get("ok") else None
         if not data:
             continue
-        if str(data.get("clasificacion")) != "PRIORIZACION":
+        if str(data.get("clasificacion")) != "PRIORIZACION" or str(data.get("estado_actual")) != "VERDE":
             continue
         restante = calcular_prioridad_restante(data)
         if restante is not None and restante <= 0:

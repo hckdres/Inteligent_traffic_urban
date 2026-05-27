@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -18,7 +19,7 @@ from src.enums.accion_semaforo import AccionSemaforo
 from src.enums.estado_circulacion import EstadoCirculacion
 from src.pc2.gestor_failover import GestorFailover
 from src.pc2.health_check import HealthCheckPC3
-from src.utils.intersecciones import descomponer_interseccion, fila_a_indice
+from src.utils.intersecciones import descomponer_interseccion, fila_a_indice, ordenar_intersecciones
 from src.utils.timezones import COLOMBIA_TZ
 
 
@@ -238,6 +239,7 @@ class ServicioAnalitica:
                     "ok": False,
                     "error": "No se pudo construir el corredor. Usa FILA o COLUMNA, dirección ADELANTE/ATRAS y una intersección válida.",
                 }
+            intersecciones_bloqueadas = self._resolver_intersecciones_bloqueadas(intersecciones_afectadas)
             decision = {
                 "interseccion": interseccion,
                 "estado_circulacion": EstadoCirculacion.PRIORIZACION.value,
@@ -252,12 +254,14 @@ class ServicioAnalitica:
                     "motivo": "AMBULANCIA",
                     "vehiculos_contados": 1,
                     "intersecciones_corredor": intersecciones_afectadas,
+                    "intersecciones_bloqueadas": intersecciones_bloqueadas,
                     "prioridad_hasta": (
                         datetime.now(timezone.utc)
                         + timedelta(seconds=int(solicitud.get("duracion_verde_segundos", 10)))
                     ).isoformat(timespec="seconds"),
                 },
                 "intersecciones_afectadas": intersecciones_afectadas,
+                "intersecciones_bloqueadas": intersecciones_bloqueadas,
                 "origen": "MANUAL",
             }
             self._registrar_prioridad(decision)
@@ -280,13 +284,11 @@ class ServicioAnalitica:
             return {"ok": False, "error": f"tipo de solicitud no soportado: {tipo}"}
 
         self._enviar_a_control(decision)
-        self.failover.persistir_decision(decision)
-        self.failover.registrar_solicitud({
-            "tipo_solicitud": tipo.upper(),
-            "interseccion": interseccion,
-            "detalle": solicitud.get("detalle"),
-            "resultado_resumen": self._resumen_solicitud(decision),
-        })
+        threading.Thread(
+            target=self._persistir_solicitud_directa,
+            args=(decision, tipo, interseccion, solicitud.get("detalle")),
+            daemon=True,
+        ).start()
         return {"ok": True, "decision": decision}
 
     def _enviar_a_control(self, decision: Dict[str, Any]) -> None:
@@ -328,6 +330,25 @@ class ServicioAnalitica:
             return ordenados[indice_origen:]
         return list(reversed(ordenados[:indice_origen + 1]))
 
+    def _resolver_intersecciones_bloqueadas(self, corredor: List[str]) -> List[str]:
+        if not corredor:
+            return []
+
+        corredor_set = set(corredor)
+        bloqueadas: set[str] = set()
+        for codigo in self.intersecciones_validas:
+            if codigo in corredor_set:
+                continue
+            fila_codigo, columna_codigo = descomponer_interseccion(codigo)
+            fila_idx_codigo = fila_a_indice(fila_codigo)
+            for codigo_corredor in corredor:
+                fila_corredor, columna_corredor = descomponer_interseccion(codigo_corredor)
+                if abs(fila_idx_codigo - fila_a_indice(fila_corredor)) + abs(columna_codigo - columna_corredor) == 1:
+                    bloqueadas.add(codigo)
+                    break
+
+        return ordenar_intersecciones(bloqueadas)
+
     @staticmethod
     def _resumen_solicitud(decision: Dict[str, Any]) -> str:
         afectadas = decision.get("intersecciones_afectadas", [])
@@ -335,8 +356,35 @@ class ServicioAnalitica:
             return f"Acción ejecutada: {decision['accion']} sobre {', '.join(afectadas)}"
         return f"Acción ejecutada: {decision['accion']}"
 
+    def _persistir_solicitud_directa(
+        self,
+        decision: Dict[str, Any],
+        tipo: str,
+        interseccion: str | None,
+        detalle: str | None,
+    ) -> None:
+        try:
+            self.failover.persistir_decision(decision)
+            self.failover.registrar_solicitud({
+                "tipo_solicitud": tipo.upper(),
+                "interseccion": interseccion,
+                "detalle": detalle,
+                "resultado_resumen": self._resumen_solicitud(decision),
+            })
+        except Exception as exc:
+            print(f"[ANALITICA] Error persistiendo solicitud directa: {exc}")
+
     def _registrar_prioridad(self, decision: Dict[str, Any]) -> None:
-        intersecciones = decision.get("intersecciones_afectadas") or [decision["interseccion"]]
+        intersecciones: List[str] = []
+        vistos: set[str] = set()
+        for clave in ("intersecciones_afectadas", "intersecciones_bloqueadas"):
+            for codigo in decision.get(clave) or []:
+                if codigo in vistos:
+                    continue
+                vistos.add(codigo)
+                intersecciones.append(codigo)
+        if not intersecciones:
+            intersecciones = [decision["interseccion"]]
         expira_en = datetime.now(timezone.utc) + timedelta(
             seconds=int(decision.get("duracion_verde_segundos", 10))
         )

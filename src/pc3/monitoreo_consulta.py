@@ -24,7 +24,8 @@ ANALITICA_COMMAND_ENDPOINT = "tcp://127.0.0.1:5562"
 class MonitoreoConsulta:
     def __init__(self) -> None:
         self.context = zmq.Context.instance()
-        self.timeout_ms = 700
+        self.timeout_ms = 1200
+        self.command_timeout_ms = 4000
         self.console = Console()
         self.ciudad = self._cargar_ciudad()
         self._primaria_disponible = True
@@ -111,7 +112,9 @@ class MonitoreoConsulta:
         table.add_row("Longitud Cola", str(data.get("longitud_cola")))
         table.add_row("Velocidad Promedio", str(data.get("velocidad_promedio")))
         table.add_row("Densidad", str(data.get("densidad_trafico")))
-        table.add_row("Estado Semáforo", f"[bold]{data.get('estado_actual')}[/bold]")
+        estado_semaforo = str(data.get("estado_actual") or "DESCONOCIDO")
+        color_semaforo = "green" if estado_semaforo == "VERDE" else "red" if estado_semaforo == "ROJO" else "yellow"
+        table.add_row("Estado Semáforo", f"[bold {color_semaforo}]{estado_semaforo}[/{color_semaforo}]")
         table.add_row("Último Comando", str(data.get("ultimo_comando") or "SIN_COMANDO"))
         table.add_row("Duración Programada", f"{data.get('duracion_base_seg')}s")
         restante = self._prioridad_restante(data)
@@ -129,6 +132,7 @@ class MonitoreoConsulta:
         corredor = decision.get("contexto", {}).get("modo_corredor", "N/A")
         direccion = decision.get("contexto", {}).get("direccion", "N/A")
         afectadas = decision.get("intersecciones_afectadas", [])
+        bloqueadas = decision.get("intersecciones_bloqueadas", [])
         interseccion = decision.get("interseccion", "N/A")
         duracion = decision.get("duracion_verde_segundos", "N/A")
         detalle = decision.get("contexto", {}).get("detalle") or "Sin detalle"
@@ -142,14 +146,15 @@ class MonitoreoConsulta:
         resumen.add_row("Duración", f"[bold]{duracion}s[/bold]")
         resumen.add_row("Detalle", detalle)
         resumen.add_row("Intersecciones liberadas", ", ".join(afectadas) if afectadas else "Ninguna")
+        resumen.add_row("Intersecciones bloqueadas", ", ".join(bloqueadas) if bloqueadas else "Ninguna")
 
         self.console.print(Panel(resumen, title="[bold green]Prioridad de Ambulancia Activada[/bold green]", border_style="green"))
 
-        mapa = self._render_mapa_corredor(interseccion, afectadas)
+        mapa = self._render_mapa_corredor(interseccion, afectadas, bloqueadas)
         if mapa is not None:
             self.console.print(mapa)
 
-    def _render_mapa_corredor(self, origen: str, afectadas: list[str]) -> Panel | None:
+    def _render_mapa_corredor(self, origen: str, afectadas: list[str], bloqueadas: list[str]) -> Panel | None:
         ciudad = self.ciudad
         intersecciones = ciudad.get("intersecciones", [])
         if not intersecciones:
@@ -167,6 +172,7 @@ class MonitoreoConsulta:
             tabla.add_column(str(columna), justify="center")
 
         afectadas_set = set(afectadas)
+        bloqueadas_set = set(bloqueadas)
         for fila in sorted(filas, key=fila_a_indice):
             celdas = [fila]
             for columna in range(1, total_columnas + 1):
@@ -180,12 +186,14 @@ class MonitoreoConsulta:
                     celda = f"[bold black on bright_yellow]{etiqueta} AMB[/bold black on bright_yellow]"
                 elif codigo in afectadas_set:
                     celda = f"[bold black on green]{etiqueta} PASO[/bold black on green]"
+                elif codigo in bloqueadas_set:
+                    celda = f"[bold white on red]{etiqueta} BLOQ[/bold white on red]"
                 else:
                     celda = f"[white on rgb(60,60,60)]{etiqueta} NORMAL[/white on rgb(60,60,60)]"
                 celdas.append(celda)
             tabla.add_row(*celdas)
 
-        nota = Text("AMB = punto de referencia de la ambulancia | PASO = corredor con prioridad", style="dim")
+        nota = Text("AMB = punto de referencia de la ambulancia | PASO = corredor con prioridad | BLOQ = semáforo en rojo", style="dim")
         tabla.caption = nota
         return Panel(tabla, border_style="bright_green")
 
@@ -280,8 +288,8 @@ class MonitoreoConsulta:
     def enviar_indicacion(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         socket = self.context.socket(zmq.REQ)
         socket.connect(ANALITICA_COMMAND_ENDPOINT)
-        socket.setsockopt(zmq.RCVTIMEO, self.timeout_ms)
-        socket.setsockopt(zmq.SNDTIMEO, self.timeout_ms)
+        socket.setsockopt(zmq.RCVTIMEO, self.command_timeout_ms)
+        socket.setsockopt(zmq.SNDTIMEO, self.command_timeout_ms)
         try:
             socket.send_json(payload)
             return socket.recv_json()
