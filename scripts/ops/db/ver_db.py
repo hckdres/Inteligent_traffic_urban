@@ -16,7 +16,9 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+ROOT = Path(__file__).resolve().parents[4]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from src.utils.timezones import COLOMBIA_TZ, UTC_TZ
 
