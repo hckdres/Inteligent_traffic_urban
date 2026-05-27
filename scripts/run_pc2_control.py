@@ -1,28 +1,11 @@
-from __future__ import annotations
-
 import argparse
-import os
-import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-
-def main(control_endpoint: str) -> None:
-    import src.pc2.servicio_control_semaforos as scs
-    scs.CONTROL_SEMAFOROS_ENDPOINT = control_endpoint
-
-    from src.pc2.servicio_control_semaforos import ServicioControlSemaforos
-
-    print(f"[PC2-CONTROL] esperando decisiones en {control_endpoint}")
-    ServicioControlSemaforos().ejecutar()
+from scripts.pc2.run_control import main
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PC2 - Servicio de Control de Semaforos (separado)")
-    parser.add_argument(
-        "--control-endpoint",
-        default="tcp://127.0.0.1:5570",
-        help="Endpoint PUSH/PULL para control de semaforos",
-    )
+    parser.add_argument("--control-host", default="127.0.0.1")
+    parser.add_argument("--control-port", type=int, default=5570)
     args = parser.parse_args()
-    main(control_endpoint=args.control_endpoint)
+    main(control_host=args.control_host, control_port=args.control_port)

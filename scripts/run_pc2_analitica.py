@@ -1,40 +1,21 @@
-from __future__ import annotations
-
 import argparse
-import os
-import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-
-def main(pc3_ip: str, control_endpoint: str) -> None:
-    import src.pc2.gestor_failover as gf
-    gf.PRIMARY_PERSIST_ENDPOINT = f"tcp://{pc3_ip}:5561"
-
-    import src.pc2.health_check as hc
-    hc.PRIMARY_HEALTH_ENDPOINT = f"tcp://{pc3_ip}:5563"
-
-    import src.pc2.servicio_analitica as sa
-    sa.PC2_PULL_ENDPOINT = "tcp://0.0.0.0:5557"
-    sa.ANALITICA_COMMAND_ENDPOINT = "tcp://0.0.0.0:5562"
-    sa.CONTROL_SEMAFOROS_ENDPOINT = control_endpoint
-
-    from src.pc2.servicio_analitica import ServicioAnalitica
-
-    print(f"[PC2-ANALITICA] escuchando eventos en tcp://0.0.0.0:5557")
-    print(f"[PC2-ANALITICA] escuchando comandos en tcp://0.0.0.0:5562")
-    print(f"[PC2-ANALITICA] enviando decisiones a control en {control_endpoint}")
-    print(f"[PC2-ANALITICA] persistencia principal hacia PC3 en {pc3_ip}")
-    ServicioAnalitica().escuchar_eventos()
+from scripts.pc2.run_analitica import main
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PC2 - Servicio de Analitica (separado)")
-    parser.add_argument("--pc3-ip", default="127.0.0.1", help="IP de PC3 (default: 127.0.0.1)")
-    parser.add_argument(
-        "--control-endpoint",
-        default="tcp://127.0.0.1:5570",
-        help="Endpoint PUSH/PULL para control de semaforos",
-    )
+    parser.add_argument("--pc3-ip", default="127.0.0.1")
+    parser.add_argument("--control-host", default="127.0.0.1")
+    parser.add_argument("--control-port", type=int, default=5570)
     args = parser.parse_args()
-    main(pc3_ip=args.pc3_ip, control_endpoint=args.control_endpoint)
+    main(
+        pc3_ip=args.pc3_ip,
+        primary_persist_port=5561,
+        primary_health_port=5563,
+        bind_host="0.0.0.0",
+        pull_port=5557,
+        command_port=5562,
+        control_host=args.control_host,
+        control_port=args.control_port,
+    )
