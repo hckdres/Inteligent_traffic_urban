@@ -1,0 +1,122 @@
+{
+  "ciudad": {
+    "nombre": "CiudadDemo",
+    "filas": 3,
+    "columnas": 3,
+    "intersecciones": [
+      "INT-A1",
+      "INT-A2",
+      "INT-A3",
+      "INT-B1",
+      "INT-B2",
+      "INT-B3",
+      "INT-C1",
+      "INT-C2",
+      "INT-C3"
+    ]
+  },
+  "parametros_generales": {
+    "intervalo_normal_segundos": 10,
+    "intervalo_congestion_segundos": 5,
+    "duracion_verde_normal_segundos": 15,
+    "extension_verde_congestion_segundos": 10,
+    "extension_verde_prioridad_segundos": 20
+  },
+  "semaforos": [
+    {
+      "semaforo_id": "SEM-A1",
+      "interseccion": "INT-A1",
+      "estado_inicial": "ROJO",
+      "duracion_verde_segundos": 15
+    },
+    {
+      "semaforo_id": "SEM-A2",
+      "interseccion": "INT-A2",
+      "estado_inicial": "VERDE",
+      "duracion_verde_segundos": 15
+    },
+    {
+      "semaforo_id": "SEM-A3",
+      "interseccion": "INT-A3",
+      "estado_inicial": "ROJO",
+      "duracion_verde_segundos": 15
+    },
+    {
+      "semaforo_id": "SEM-B1",
+      "interseccion": "INT-B1",
+      "estado_inicial": "VERDE",
+      "duracion_verde_segundos": 15
+    },
+    {
+      "semaforo_id": "SEM-B2",
+      "interseccion": "INT-B2",
+      "estado_inicial": "ROJO",
+      "duracion_verde_segundos": 15
+    },
+    {
+      "semaforo_id": "SEM-B3",
+      "interseccion": "INT-B3",
+      "estado_inicial": "VERDE",
+      "duracion_verde_segundos": 15
+    },
+    {
+      "semaforo_id": "SEM-C1",
+      "interseccion": "INT-C1",
+      "estado_inicial": "ROJO",
+      "duracion_verde_segundos": 15
+    },
+    {
+      "semaforo_id": "SEM-C2",
+      "interseccion": "INT-C2",
+      "estado_inicial": "VERDE",
+      "duracion_verde_segundos": 15
+    },
+    {
+      "semaforo_id": "SEM-C3",
+      "interseccion": "INT-C3",
+      "estado_inicial": "ROJO",
+      "duracion_verde_segundos": 15
+    }
+  ],
+  "sensores": [
+    {
+      "sensor_id": "CAM-A1",
+      "tipo_sensor": "camara",
+      "interseccion": "INT-A1",
+      "intervalo_segundos": 10,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "ESP-A1",
+      "tipo_sensor": "espira_inductiva",
+      "interseccion": "INT-A1",
+      "intervalo_segundos": 10,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "GPS-A1",
+      "tipo_sensor": "gps",
+      "interseccion": "INT-A1",
+      "intervalo_segundos": 10,
+      "modo": "archivo_json"
+    }
+  ],
+  "vias_priorizables": [
+    {
+      "via_id": "VIA-CENTRAL",
+      "intersecciones": [
+        "INT-A2",
+        "INT-B2",
+        "INT-C2"
+      ]
+    },
+    {
+      "via_id": "VIA-DIAGONAL",
+      "intersecciones": [
+        "INT-A1",
+        "INT-B2",
+        "INT-C3"
+      ]
+    }
+  ]
+}
