@@ -3,6 +3,7 @@ import os
 import zmq
 import json
 import time
+import socket
 from datetime import datetime, timezone
 import argparse
 
@@ -23,6 +24,19 @@ def construir_endpoint_pc2(pc2_ip: str, pc2_port: int) -> str:
     return f"tcp://{pc2_ip}:{pc2_port}"
 
 
+def _parsear_endpoint_tcp(endpoint: str) -> tuple[str, int] | None:
+    if not endpoint.startswith("tcp://"):
+        return None
+    host_port = endpoint.removeprefix("tcp://")
+    if ":" not in host_port:
+        return None
+    host, port_texto = host_port.rsplit(":", 1)
+    try:
+        return host, int(port_texto)
+    except ValueError:
+        return None
+
+
 def resolver_endpoint_pc2(pc2_ip: str | None, pc2_port: int | None) -> str:
     endpoint_env = os.getenv("PC2_COMMAND_ENDPOINT", "").strip()
     if endpoint_env:
@@ -36,8 +50,23 @@ def resolver_endpoint_pc2(pc2_ip: str | None, pc2_port: int | None) -> str:
     return construir_endpoint_pc2(ip_final, port_final)
 
 
+def verificar_conectividad_tcp(endpoint: str, timeout_ms: int) -> None:
+    parsed = _parsear_endpoint_tcp(endpoint)
+    if not parsed:
+        print(f"[TEST] ADVERTENCIA: no pude interpretar el endpoint {endpoint}")
+        return
+
+    host, port = parsed
+    try:
+        with socket.create_connection((host, port), timeout=timeout_ms / 1000):
+            print(f"[TEST] TCP OK -> {host}:{port}")
+    except OSError as exc:
+        print(f"[TEST] TCP FALLA -> {host}:{port} ({exc})")
+
+
 def probar_ambulancia(interseccion_codigo: str, pc2_ip: str, pc2_port: int, timeout_ms: int) -> None:
     endpoint = resolver_endpoint_pc2(pc2_ip, pc2_port)
+    verificar_conectividad_tcp(endpoint, min(timeout_ms, 1500))
     context = zmq.Context()
     socket = context.socket(zmq.REQ)
     socket.connect(endpoint)
