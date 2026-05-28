@@ -5,6 +5,7 @@ Lanza: broker_zmq + todos los sensores en hilos separados
 Uso:
     python scripts/run_pc1.py                        # IPs por defecto (localhost)
     python scripts/run_pc1.py --pc2-ip 192.168.1.20  # PC2 en otra máquina
+    python scripts/run_pc1.py --config src/config/system_escenario1.json
 """
 from __future__ import annotations
 
@@ -49,7 +50,7 @@ def publicar_eventos_sensor(sensor, publisher: ZMQPublisher, secuenciador: Secue
                 break
 
 
-def main(pc2_ip: str, multihilo: bool) -> None:
+def main(pc2_ip: str, multihilo: bool, config_path: str) -> None:
     broker_endpoint_local = "tcp://127.0.0.1:5556"
     broker_pc2_endpoint = f"tcp://{pc2_ip}:5557"
 
@@ -73,7 +74,7 @@ def main(pc2_ip: str, multihilo: bool) -> None:
     publisher = ZMQPublisher(broker_endpoint_local)
     secuenciador = SecuenciadorEventos()
     stop_event = threading.Event()
-    sensores = cargar_sensores_desde_config()
+    sensores = cargar_sensores_desde_config(config_path)
 
     hilos = []
     for sensor in sensores:
@@ -100,5 +101,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PC1 — Nodo de Captura")
     parser.add_argument("--pc2-ip", default="127.0.0.1", help="IP de PC2 (default: 127.0.0.1)")
     parser.add_argument("--multihilo", action="store_true", help="Usar broker multihilo")
+    parser.add_argument(
+        "--config",
+        default="src/config/system.json",
+        help="Ruta al archivo de configuración del sistema",
+    )
     args = parser.parse_args()
-    main(pc2_ip=args.pc2_ip, multihilo=args.multihilo)
+    main(pc2_ip=args.pc2_ip, multihilo=args.multihilo, config_path=args.config)
