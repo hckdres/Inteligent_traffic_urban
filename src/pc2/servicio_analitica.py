@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+import traceback
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -101,20 +102,24 @@ class ServicioAnalitica:
         while True:
             sockets = dict(poller.poll())
             if self.pull_socket in sockets:
-                mensaje = self.pull_socket.recv_string()
-                topico, payload_json = mensaje.split(" ", 1)
-                evento_dict = json.loads(payload_json)
-                self.console.print(
-                    f"[dim][{datetime.now(COLOMBIA_TZ).strftime('%H:%M:%S')}] "
-                    f"{topico} seq={evento_dict.get('seq')} "
-                    f"sensor={evento_dict.get('sensor_id')} "
-                    f"inter={evento_dict.get('interseccion')} "
-                    f"ts={_ts_colombia(evento_dict.get('timestamp') or evento_dict.get('timestamp_fin'))}[/dim]"
-                )
-                decision = self.procesar_evento(topico, evento_dict)
-                if decision:
-                    self._enviar_a_control(decision)
-                    self.failover.persistir_decision(decision)
+                try:
+                    mensaje = self.pull_socket.recv_string()
+                    topico, payload_json = mensaje.split(" ", 1)
+                    evento_dict = json.loads(payload_json)
+                    self.console.print(
+                        f"[dim][{datetime.now(COLOMBIA_TZ).strftime('%H:%M:%S')}] "
+                        f"{topico} seq={evento_dict.get('seq')} "
+                        f"sensor={evento_dict.get('sensor_id')} "
+                        f"inter={evento_dict.get('interseccion')} "
+                        f"ts={_ts_colombia(evento_dict.get('timestamp') or evento_dict.get('timestamp_fin'))}[/dim]"
+                    )
+                    decision = self.procesar_evento(topico, evento_dict)
+                    if decision:
+                        self._enviar_a_control(decision)
+                        self.failover.persistir_decision(decision)
+                except Exception as exc:
+                    print(f"[ANALITICA][ERROR] mensaje descartado: {exc}")
+                    traceback.print_exc()
 
             if self.rep_socket in sockets:
                 try:
