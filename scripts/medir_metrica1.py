@@ -41,9 +41,9 @@ def _parsear_timestamp_db(valor: str) -> datetime | None:
     return dt.astimezone(timezone.utc)
 
 
-def _contar_en_rango(db_path: Path, inicio_utc: datetime, fin_utc: datetime) -> dict[str, int]:
+def _contar_en_rango(db_path: Path, inicio_utc: datetime, fin_utc: datetime) -> dict[str, int] | None:
     if not db_path.exists():
-        raise FileNotFoundError(f"No existe la BD: {db_path}")
+        return None
 
     conteos = {
         "evento_sensor": 0,
@@ -98,7 +98,12 @@ def main() -> None:
 
     print(f"=== MÉTRICA 1 — {args.escenario} ===")
     print(f"Ventana: {args.fecha_inicio}  ->  {args.fecha_fin}\n")
-    _imprimir_bloque("BD Réplica (PC2)", replica)
+    if replica is None:
+        print("BD Réplica (PC2):")
+        print("  estado          : no disponible en esta máquina")
+        print("  TOTAL           : N/A")
+    else:
+        _imprimir_bloque("BD Réplica (PC2)", replica)
     print()
     _imprimir_bloque("BD Principal (PC3)", primary)
 
