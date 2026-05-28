@@ -15,7 +15,11 @@
 ## 3) Pruebas puntuales
 - `scripts/testing/test_emergencia.py`: prueba manual de priorización de ambulancia
 
-## 4) Estado actual de lanzamiento
+## 4) Métricas
+- `scripts/medir_metrica1.py`: conteo por ventana temporal en BD réplica y principal
+- `scripts/medir_metrica2.py`: latencia promedio de solicitudes de priorización de ambulancia
+
+## 5) Estado actual de lanzamiento
 - Lanzamiento oficial por componentes en `scripts/pc1/`, `scripts/pc2/` y `scripts/pc3/`.
 - Los `run_*.py` de la raiz de `scripts/` ya no se usan.
 

@@ -89,18 +89,21 @@ def probar_ambulancia(interseccion_codigo: str, pc2_ip: str, pc2_port: int, time
     }
     
     print(f"[TEST] Enviando solicitud a PC2 ({endpoint})...")
-    socket.send_json(payload)
-    
+    t_inicio = time.perf_counter()
     try:
+        socket.send_json(payload)
         print("[TEST] Esperando respuesta de Analítica...")
         respuesta = socket.recv_json()
+        delta = time.perf_counter() - t_inicio
+        print(f"[TEST] delta_seg={delta:.3f}")
         print(f"[TEST] Respuesta recibida: {json.dumps(respuesta, indent=2)}")
         if respuesta.get("ok"):
             print("[TEST] ¡ÉXITO! Semáforos ajustados.")
         else:
             print(f"[TEST] FALLO en la aplicación: {respuesta.get('error')}")
     except zmq.ZMQError as e:
-        print(f"[TEST] ERROR DE COMUNICACIÓN: {e} (endpoint={endpoint}, timeout_ms={timeout_ms})")
+        delta = time.perf_counter() - t_inicio
+        print(f"[TEST] ERROR DE COMUNICACIÓN: {e} (endpoint={endpoint}, timeout_ms={timeout_ms}, delta_seg={delta:.3f})")
     finally:
         socket.close()
         context.term()
