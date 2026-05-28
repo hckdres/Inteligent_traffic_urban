@@ -22,6 +22,7 @@ def main(
     command_port: int,
     control_host: str,
     control_port: int,
+    config_path: str,
 ) -> None:
     import src.pc2.gestor_failover as gf
     import src.pc2.health_check as hc
@@ -39,7 +40,8 @@ def main(
     print(f"[PC2-ANALITICA] control={sa.CONTROL_SEMAFOROS_ENDPOINT}")
     print(f"[PC2-ANALITICA] primary_persist={gf.PRIMARY_PERSIST_ENDPOINT}")
     print(f"[PC2-ANALITICA] primary_health={hc.PRIMARY_HEALTH_ENDPOINT}")
-    ServicioAnalitica().escuchar_eventos()
+    print(f"[PC2-ANALITICA] config={config_path}")
+    ServicioAnalitica(ruta_config_sistema=config_path).escuchar_eventos()
 
 
 if __name__ == "__main__":
@@ -52,6 +54,7 @@ if __name__ == "__main__":
     parser.add_argument("--command-port", type=int, default=5562)
     parser.add_argument("--control-host", default="127.0.0.1")
     parser.add_argument("--control-port", type=int, default=5570)
+    parser.add_argument("--config", default="src/config/system.json")
     args = parser.parse_args()
     main(
         args.pc3_ip,
@@ -62,4 +65,5 @@ if __name__ == "__main__":
         args.command_port,
         args.control_host,
         args.control_port,
+        args.config,
     )

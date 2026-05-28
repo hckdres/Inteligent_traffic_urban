@@ -12,7 +12,7 @@ if hasattr(sys.stderr, "reconfigure"):
 from src.pc2.main_pc2 import main
 
 
-def ejecutar_pc2(pc3_ip: str) -> None:
+def ejecutar_pc2(pc3_ip: str, config_path: str) -> None:
     import src.pc2.gestor_failover as gf
     gf.PRIMARY_PERSIST_ENDPOINT = f"tcp://{pc3_ip}:5561"
 
@@ -29,11 +29,12 @@ def ejecutar_pc2(pc3_ip: str) -> None:
 
     print(f"[PC2] Conectando a PC3 en {pc3_ip}")
     print("[PC2] Escuchando réplica en 0.0.0.0:5560 y 0.0.0.0:5565")
-    main()
+    main(config_path=config_path)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PC2 — Análisis y Persistencia Secundaria")
     parser.add_argument("--pc3-ip", default="127.0.0.1", help="IP de PC3 (default: 127.0.0.1)")
+    parser.add_argument("--config", default="src/config/system.json", help="Ruta al archivo de configuración del sistema")
     args = parser.parse_args()
-    ejecutar_pc2(pc3_ip=args.pc3_ip)
+    ejecutar_pc2(pc3_ip=args.pc3_ip, config_path=args.config)

@@ -23,11 +23,12 @@ ANALITICA_COMMAND_ENDPOINT = "tcp://127.0.0.1:5562"
 
 
 class MonitoreoConsulta:
-    def __init__(self) -> None:
+    def __init__(self, ruta_config_sistema: str = "src/config/system.json") -> None:
         self.context = zmq.Context.instance()
         self.timeout_ms = 1200
         self.command_timeout_ms = 4000
         self.console = Console()
+        self.ruta_config_sistema = ruta_config_sistema
         self.ciudad = self._cargar_ciudad()
         self._primaria_disponible = True
 
@@ -199,7 +200,9 @@ class MonitoreoConsulta:
         return Panel(tabla, border_style="bright_green")
 
     def _cargar_ciudad(self) -> Dict[str, Any]:
-        ruta = Path(__file__).resolve().parent.parent / "config" / "system.json"
+        ruta = Path(self.ruta_config_sistema)
+        if not ruta.is_absolute():
+            ruta = Path(__file__).resolve().parents[2] / ruta
         if not ruta.exists():
             return {}
         try:

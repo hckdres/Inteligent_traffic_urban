@@ -11,6 +11,7 @@ from src.persistence.repositorio_sqlite import RepositorioSQLite
 PRIMARY_PERSIST_ENDPOINT = "tcp://127.0.0.1:5561"
 PRIMARY_QUERY_ENDPOINT   = "tcp://127.0.0.1:5564"
 PRIMARY_HEALTH_ENDPOINT  = "tcp://127.0.0.1:5563"
+PRIMARY_ADMIN_ENDPOINT   = "tcp://127.0.0.1:5566"
 
 logger = logging.getLogger("pc3_db")
 
@@ -28,6 +29,7 @@ class ServidorBDPrincipal:
         logger.setLevel(logging.INFO)
 
         self.context = zmq.Context.instance()
+        self._detener = False
 
         self.pull_socket = self.context.socket(zmq.PULL)
         self.pull_socket.bind(PRIMARY_PERSIST_ENDPOINT)
@@ -37,6 +39,9 @@ class ServidorBDPrincipal:
 
         self.health_socket = self.context.socket(zmq.REP)
         self.health_socket.bind(PRIMARY_HEALTH_ENDPOINT)
+
+        self.admin_socket = self.context.socket(zmq.REP)
+        self.admin_socket.bind(PRIMARY_ADMIN_ENDPOINT)
 
     def seed(self, config: Dict[str, Any]) -> None:
         if not self._seed_hecho:
@@ -49,9 +54,10 @@ class ServidorBDPrincipal:
         poller.register(self.pull_socket, zmq.POLLIN)
         poller.register(self.rep_socket, zmq.POLLIN)
         poller.register(self.health_socket, zmq.POLLIN)
+        poller.register(self.admin_socket, zmq.POLLIN)
 
         logger.info("[BD_PRINCIPAL] lista")
-        while True:
+        while not self._detener:
             eventos = dict(poller.poll())
             if self.pull_socket in eventos:
                 self._manejar_persistencia(self.pull_socket.recv_json())
@@ -61,6 +67,14 @@ class ServidorBDPrincipal:
             if self.health_socket in eventos:
                 self.health_socket.recv_json()
                 self.health_socket.send_json({"ok": True, "servidor": "primary"})
+            if self.admin_socket in eventos:
+                respuesta = self._manejar_admin(self.admin_socket.recv_json())
+                self.admin_socket.send_json(respuesta)
+                if respuesta.get("accion") == "SIMULAR_CAIDA":
+                    self._detener = True
+
+        self._cerrar_sockets()
+        logger.info("[BD_PRINCIPAL] detenido")
 
     def _manejar_persistencia(self, mensaje: Dict[str, Any]) -> None:
         tipo = mensaje.get("tipo")
@@ -110,6 +124,31 @@ class ServidorBDPrincipal:
             return {"ok": False, "error": f"consulta no soportada: {tipo}"}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
+
+    def _manejar_admin(self, solicitud: Dict[str, Any]) -> Dict[str, Any]:
+        tipo = str(solicitud.get("tipo", "")).strip().upper()
+        if tipo == "SIMULAR_CAIDA":
+            logger.warning("[BD_PRINCIPAL] caída simulada solicitada")
+            return {
+                "ok": True,
+                "servidor": "primary",
+                "accion": "SIMULAR_CAIDA",
+            }
+        if tipo == "ESTADO":
+            return {
+                "ok": True,
+                "servidor": "primary",
+                "accion": "ESTADO",
+                "detenido": self._detener,
+            }
+        return {"ok": False, "error": f"comando no soportado: {tipo}"}
+
+    def _cerrar_sockets(self) -> None:
+        for socket in (self.pull_socket, self.rep_socket, self.health_socket, self.admin_socket):
+            try:
+                socket.close(0)
+            except Exception:
+                pass
 
 
 def main() -> None:

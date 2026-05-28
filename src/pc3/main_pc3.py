@@ -8,12 +8,12 @@ from src.pc3.monitoreo_consulta import MonitoreoConsulta
 from src.pc3.servidor_bd_principal import ServidorBDPrincipal
 
 
-def main() -> None:
+def main(config_path: str = "src/config/system.json") -> None:
     servidor = ServidorBDPrincipal()
     try:
-        config_path = Path("src/config/system.json")
-        if config_path.exists():
-            with config_path.open("r", encoding="utf-8") as f:
+        ruta = Path(config_path)
+        if ruta.exists():
+            with ruta.open("r", encoding="utf-8") as f:
                 config = json.load(f)
             servidor.seed(config)
             print("[PC3] BD principal sembrada con catalogos.")
@@ -23,7 +23,7 @@ def main() -> None:
     hilo_bd = threading.Thread(target=servidor.iniciar, daemon=True)
     hilo_bd.start()
 
-    MonitoreoConsulta().ejecutar()
+    MonitoreoConsulta(ruta_config_sistema=config_path).ejecutar()
 
 
 if __name__ == "__main__":

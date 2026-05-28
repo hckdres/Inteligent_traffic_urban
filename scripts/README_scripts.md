@@ -14,6 +14,8 @@
 
 ## 3) Pruebas puntuales
 - `scripts/testing/test_emergencia.py`: prueba manual de priorización de ambulancia y emite `delta_seg`
+- `scripts/pc3/run_escenario_programado.py`: escenario cronológico para congestiones, ambulancias y caída de la BD principal
+- `scripts/ops/generar_config_ciudad.py`: genera configuraciones de ciudad parametrizadas, por ejemplo 3x5
 
 ## 4) Métricas
 - `scripts/medir_metrica1.py`: conteo por ventana temporal en BD réplica y principal

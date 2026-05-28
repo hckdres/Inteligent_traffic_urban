@@ -1,0 +1,30 @@
+{
+  "acciones": [
+    {
+      "segundo": 60,
+      "tipo": "congestion",
+      "interseccion": "INT-B2"
+    },
+    {
+      "segundo": 95,
+      "tipo": "congestion",
+      "interseccion": "INT-C4"
+    },
+    {
+      "segundo": 130,
+      "tipo": "ambulancia",
+      "interseccion": "INT-A1",
+      "duracion_verde_segundos": 20
+    },
+    {
+      "segundo": 140,
+      "tipo": "caida_primary"
+    },
+    {
+      "segundo": 150,
+      "tipo": "ambulancia",
+      "interseccion": "INT-A3",
+      "duracion_verde_segundos": 20
+    }
+  ]
+}

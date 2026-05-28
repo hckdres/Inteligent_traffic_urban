@@ -27,7 +27,7 @@ from src.pc3.monitoreo_consulta import MonitoreoConsulta
 from src.pc3.servidor_bd_principal import ServidorBDPrincipal
 
 
-def main(pc2_ip: str) -> None:
+def main(pc2_ip: str, config_path: str) -> None:
     analitica_cmd = f"tcp://{pc2_ip}:5562"
     replica_query = f"tcp://{pc2_ip}:5565"
 
@@ -35,6 +35,7 @@ def main(pc2_ip: str) -> None:
     sbp_mod.PRIMARY_PERSIST_ENDPOINT = "tcp://0.0.0.0:5561"
     sbp_mod.PRIMARY_QUERY_ENDPOINT = "tcp://0.0.0.0:5564"
     sbp_mod.PRIMARY_HEALTH_ENDPOINT = "tcp://0.0.0.0:5563"
+    sbp_mod.PRIMARY_ADMIN_ENDPOINT = "tcp://0.0.0.0:5566"
 
     mc_mod.ANALITICA_COMMAND_ENDPOINT = analitica_cmd
     mc_mod.REPLICA_QUERY_ENDPOINT = replica_query
@@ -44,31 +45,33 @@ def main(pc2_ip: str) -> None:
     print(f"[PC3]   PULL persistencia : tcp://0.0.0.0:5561")
     print(f"[PC3]   REP consultas     : tcp://0.0.0.0:5564")
     print(f"[PC3]   REP health        : tcp://0.0.0.0:5563")
+    print(f"[PC3]   REP admin         : tcp://0.0.0.0:5566")
     print(f"[PC3]   REQ -> analítica  : {analitica_cmd}")
     print(f"[PC3]   REQ -> réplica    : {replica_query}")
 
     bd_principal = ServidorBDPrincipal()
 
-    config_path = Path("src/config/system.json")
-    if config_path.exists():
+    ruta_config = Path(config_path)
+    if ruta_config.exists():
         try:
-            with config_path.open("r", encoding="utf-8") as f:
+            with ruta_config.open("r", encoding="utf-8") as f:
                 config = json.load(f)
             bd_principal.seed(config)
         except Exception as e:
             print(f"[PC3] Error sembrando BD principal: {e}")
     else:
-        print("[PC3] ADVERTENCIA: no se encontró src/config/system.json")
+        print(f"[PC3] ADVERTENCIA: no se encontró {config_path}")
 
     hilo_bd = threading.Thread(target=bd_principal.iniciar, daemon=True, name="bd-principal")
     hilo_bd.start()
     print("[PC3] BD Principal iniciada")
 
-    MonitoreoConsulta().ejecutar()
+    MonitoreoConsulta(ruta_config_sistema=config_path).ejecutar()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PC3 — Monitoreo y BD Principal")
     parser.add_argument("--pc2-ip", default="127.0.0.1", help="IP de PC2 (default: 127.0.0.1)")
+    parser.add_argument("--config", default="src/config/system.json", help="Ruta al archivo de configuración del sistema")
     args = parser.parse_args()
-    main(pc2_ip=args.pc2_ip)
+    main(pc2_ip=args.pc2_ip, config_path=args.config)

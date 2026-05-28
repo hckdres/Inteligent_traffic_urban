@@ -9,12 +9,12 @@ from src.pc2.servicio_control_semaforos import ServicioControlSemaforos
 from src.pc2.servidor_bd_replica import ServidorBDReplica
 
 
-def main() -> None:
+def main(config_path: str = "src/config/system.json") -> None:
     replica = ServidorBDReplica()
     try:
-        config_path = Path("src/config/system.json")
-        if config_path.exists():
-            with config_path.open("r", encoding="utf-8") as f:
+        ruta = Path(config_path)
+        if ruta.exists():
+            with ruta.open("r", encoding="utf-8") as f:
                 config = json.load(f)
             replica.repo.seed_desde_config(config)
             print("[PC2] BD réplica sembrada con catálogos.")
@@ -27,7 +27,7 @@ def main() -> None:
     hilo_control = threading.Thread(target=ServicioControlSemaforos().ejecutar, daemon=True)
     hilo_control.start()
 
-    servicio = ServicioAnalitica()
+    servicio = ServicioAnalitica(ruta_config_sistema=config_path)
     servicio.escuchar_eventos()
 
 

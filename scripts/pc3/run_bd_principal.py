@@ -14,13 +14,21 @@ from scripts.common_bootstrap import bootstrap_project_root
 bootstrap_project_root()
 
 
-def main(bind_host: str, persist_port: int, query_port: int, health_port: int, seed_path: str) -> None:
+def main(
+    bind_host: str,
+    persist_port: int,
+    query_port: int,
+    health_port: int,
+    admin_port: int,
+    seed_path: str,
+) -> None:
     import src.pc3.servidor_bd_principal as sbp_mod
     from src.pc3.servidor_bd_principal import ServidorBDPrincipal
 
     sbp_mod.PRIMARY_PERSIST_ENDPOINT = f"tcp://{bind_host}:{persist_port}"
     sbp_mod.PRIMARY_QUERY_ENDPOINT = f"tcp://{bind_host}:{query_port}"
     sbp_mod.PRIMARY_HEALTH_ENDPOINT = f"tcp://{bind_host}:{health_port}"
+    sbp_mod.PRIMARY_ADMIN_ENDPOINT = f"tcp://{bind_host}:{admin_port}"
 
     servidor = ServidorBDPrincipal()
     config_path = Path(seed_path)
@@ -34,6 +42,7 @@ def main(bind_host: str, persist_port: int, query_port: int, health_port: int, s
     print(f"[PC3-BD] persist={sbp_mod.PRIMARY_PERSIST_ENDPOINT}")
     print(f"[PC3-BD] query={sbp_mod.PRIMARY_QUERY_ENDPOINT}")
     print(f"[PC3-BD] health={sbp_mod.PRIMARY_HEALTH_ENDPOINT}")
+    print(f"[PC3-BD] admin={sbp_mod.PRIMARY_ADMIN_ENDPOINT}")
     servidor.iniciar()
 
 
@@ -43,6 +52,7 @@ if __name__ == "__main__":
     parser.add_argument("--persist-port", type=int, default=5561)
     parser.add_argument("--query-port", type=int, default=5564)
     parser.add_argument("--health-port", type=int, default=5563)
+    parser.add_argument("--admin-port", type=int, default=5566)
     parser.add_argument("--seed-path", default="src/config/system.json")
     args = parser.parse_args()
-    main(args.bind_host, args.persist_port, args.query_port, args.health_port, args.seed_path)
+    main(args.bind_host, args.persist_port, args.query_port, args.health_port, args.admin_port, args.seed_path)
