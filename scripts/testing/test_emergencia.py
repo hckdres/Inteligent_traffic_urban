@@ -4,6 +4,7 @@ import zmq
 import json
 import time
 from datetime import datetime, timezone
+import argparse
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
@@ -14,13 +15,35 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from src.dominio.ambulancia import Ambulancia
 
-PC3_COMMAND_ENDPOINT = "tcp://127.0.0.1:5562" # Reenvía a analítica PC2
+DEFAULT_PC2_IP = "127.0.0.1"
+DEFAULT_PC2_PORT = 5562
 
-def probar_ambulancia(interseccion_codigo: str):
+
+def construir_endpoint_pc2(pc2_ip: str, pc2_port: int) -> str:
+    return f"tcp://{pc2_ip}:{pc2_port}"
+
+
+def resolver_endpoint_pc2(pc2_ip: str | None, pc2_port: int | None) -> str:
+    endpoint_env = os.getenv("PC2_COMMAND_ENDPOINT", "").strip()
+    if endpoint_env:
+        return endpoint_env
+
+    ip_env = os.getenv("PC2_IP", "").strip()
+    port_env = os.getenv("PC2_COMMAND_PORT", "").strip()
+
+    ip_final = pc2_ip or ip_env or DEFAULT_PC2_IP
+    port_final = pc2_port or (int(port_env) if port_env else DEFAULT_PC2_PORT)
+    return construir_endpoint_pc2(ip_final, port_final)
+
+
+def probar_ambulancia(interseccion_codigo: str, pc2_ip: str, pc2_port: int, timeout_ms: int) -> None:
+    endpoint = resolver_endpoint_pc2(pc2_ip, pc2_port)
     context = zmq.Context()
     socket = context.socket(zmq.REQ)
-    socket.connect(PC3_COMMAND_ENDPOINT)
-    socket.setsockopt(zmq.RCVTIMEO, 2000)
+    socket.connect(endpoint)
+    socket.setsockopt(zmq.RCVTIMEO, timeout_ms)
+    socket.setsockopt(zmq.SNDTIMEO, timeout_ms)
+    socket.setsockopt(zmq.LINGER, 0)
 
     ambulancia = Ambulancia(id_vehiculo="AMB-505", velocidad_actual=60.5, ubicacion_actual=interseccion_codigo, en_emergencia=True)
     
@@ -36,7 +59,7 @@ def probar_ambulancia(interseccion_codigo: str):
         "duracion_verde_segundos": 10
     }
     
-    print(f"[TEST] Enviando solicitud a PC2 ({PC3_COMMAND_ENDPOINT})...")
+    print(f"[TEST] Enviando solicitud a PC2 ({endpoint})...")
     socket.send_json(payload)
     
     try:
@@ -48,16 +71,19 @@ def probar_ambulancia(interseccion_codigo: str):
         else:
             print(f"[TEST] FALLO en la aplicación: {respuesta.get('error')}")
     except zmq.ZMQError as e:
-        print(f"[TEST] ERROR DE COMUNICACIÓN: {e}")
+        print(f"[TEST] ERROR DE COMUNICACIÓN: {e} (endpoint={endpoint}, timeout_ms={timeout_ms})")
     finally:
         socket.close()
         context.term()
         print("[TEST] Conexión cerrada.")
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        inter = sys.argv[1]
-    else:
-        inter = "INT-A1"
-    probar_ambulancia(inter)
+    parser = argparse.ArgumentParser(description="Prueba manual de priorización de ambulancia")
+    parser.add_argument("interseccion", nargs="?", default="INT-A1", help="Intersección objetivo, ej. INT-C3")
+    parser.add_argument("--pc2-ip", default=None, help="IP de PC2 donde escucha la analítica")
+    parser.add_argument("--pc2-port", type=int, default=None, help="Puerto de comando de analítica en PC2")
+    parser.add_argument("--timeout-ms", type=int, default=5000, help="Tiempo de espera para respuesta")
+    args = parser.parse_args()
+
+    probar_ambulancia(args.interseccion, args.pc2_ip, args.pc2_port, args.timeout_ms)
 
