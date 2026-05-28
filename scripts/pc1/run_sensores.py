@@ -46,14 +46,15 @@ def publicar_eventos_sensor(sensor, publisher: ZMQPublisher, secuenciador: Secue
             print(f"[PC1][ERROR][{sensor.sensor_id}] {exc}")
 
 
-def main(broker_ip: str, broker_port: int) -> None:
+def main(broker_ip: str, broker_port: int, config_path: str) -> None:
     endpoint = f"tcp://{broker_ip}:{broker_port}"
     publisher = ZMQPublisher(endpoint)
     secuenciador = SecuenciadorEventos()
     stop_event = threading.Event()
-    sensores = cargar_sensores_desde_config()
+    sensores = cargar_sensores_desde_config(config_path)
 
     print(f"[PC1-SENSORES] publicando en {endpoint}")
+    print(f"[PC1-SENSORES] config={config_path}")
     print(f"[PC1-SENSORES] sensores activos={len(sensores)}")
 
     hilos = []
@@ -79,5 +80,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PC1 - Sensores (componente separado)")
     parser.add_argument("--broker-ip", default="127.0.0.1")
     parser.add_argument("--broker-port", type=int, default=5556)
+    parser.add_argument("--config", default="src/config/system.json")
     args = parser.parse_args()
-    main(args.broker_ip, args.broker_port)
+    main(args.broker_ip, args.broker_port, args.config)

@@ -20,7 +20,10 @@ from src.enums.accion_semaforo import AccionSemaforo
 from src.enums.estado_circulacion import EstadoCirculacion
 from src.pc2.gestor_failover import GestorFailover
 from src.pc2.health_check import HealthCheckPC3
-from src.utils.intersecciones import descomponer_interseccion, fila_a_indice, ordenar_intersecciones
+from src.utils.intersecciones import (
+    ordenar_intersecciones_ciudad,
+    posicion_en_ciudad,
+)
 from src.utils.timezones import COLOMBIA_TZ
 
 
@@ -51,7 +54,8 @@ class ServicioAnalitica:
         self.ruta_reglas = Path(ruta_reglas)
         self.ruta_config_sistema = Path(ruta_config_sistema)
         self.reglas = self._cargar_reglas()
-        self.intersecciones_validas = self._cargar_intersecciones_validas()
+        self.ciudad = self._cargar_ciudad()
+        self.intersecciones_validas = set(self.ciudad.get("intersecciones", []))
         self.failover = GestorFailover()
 
         self.context = zmq.Context.instance()
@@ -88,12 +92,12 @@ class ServicioAnalitica:
 
         return [ReglaTrafico.desde_dict(item) for item in data.get("reglas", [])]
 
-    def _cargar_intersecciones_validas(self) -> set[str]:
+    def _cargar_ciudad(self) -> Dict[str, Any]:
         if not self.ruta_config_sistema.exists():
-            return set()
+            return {}
         with self.ruta_config_sistema.open("r", encoding="utf-8") as archivo:
             data = json.load(archivo)
-        return set(data.get("ciudad", {}).get("intersecciones", []))
+        return data.get("ciudad", {})
 
     def escuchar_eventos(self) -> None:
         print("[ANALITICA] escuchando eventos y comandos...")
@@ -314,10 +318,10 @@ class ServicioAnalitica:
         if direccion not in {"ADELANTE", "ATRAS"}:
             return []
 
-        fila, columna = descomponer_interseccion(interseccion)
+        fila, columna = posicion_en_ciudad(interseccion, self.ciudad)
         candidatos: List[tuple[str, int, int]] = []
         for codigo in self.intersecciones_validas:
-            fila_actual, columna_actual = descomponer_interseccion(codigo)
+            fila_actual, columna_actual = posicion_en_ciudad(codigo, self.ciudad)
             if modo_corredor == "FILA" and fila_actual == fila:
                 candidatos.append((codigo, fila_actual, columna_actual))
             elif modo_corredor == "COLUMNA" and columna_actual == columna:
@@ -326,7 +330,7 @@ class ServicioAnalitica:
         if modo_corredor == "FILA":
             candidatos.sort(key=lambda item: item[2])
         else:
-            candidatos.sort(key=lambda item: fila_a_indice(item[1]))
+            candidatos.sort(key=lambda item: item[1])
 
         ordenados = [codigo for codigo, _, _ in candidatos]
         if interseccion not in ordenados:
@@ -346,15 +350,14 @@ class ServicioAnalitica:
         for codigo in self.intersecciones_validas:
             if codigo in corredor_set:
                 continue
-            fila_codigo, columna_codigo = descomponer_interseccion(codigo)
-            fila_idx_codigo = fila_a_indice(fila_codigo)
+            fila_codigo, columna_codigo = posicion_en_ciudad(codigo, self.ciudad)
             for codigo_corredor in corredor:
-                fila_corredor, columna_corredor = descomponer_interseccion(codigo_corredor)
-                if abs(fila_idx_codigo - fila_a_indice(fila_corredor)) + abs(columna_codigo - columna_corredor) == 1:
+                fila_corredor, columna_corredor = posicion_en_ciudad(codigo_corredor, self.ciudad)
+                if abs(fila_codigo - fila_corredor) + abs(columna_codigo - columna_corredor) == 1:
                     bloqueadas.add(codigo)
                     break
 
-        return ordenar_intersecciones(bloqueadas)
+        return ordenar_intersecciones_ciudad(bloqueadas, self.ciudad)
 
     @staticmethod
     def _resumen_solicitud(decision: Dict[str, Any]) -> str:

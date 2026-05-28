@@ -21,10 +21,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.utils.timezones import COLOMBIA_TZ
-from src.utils.intersecciones import (
-    descomponer_interseccion as descomponer_interseccion_cfg,
-    fila_a_indice,
-)
+from src.utils.intersecciones import posicion_en_ciudad
 
 
 PRIMARY_QUERY_ENDPOINT = "tcp://127.0.0.1:5564"
@@ -33,18 +30,15 @@ DEFAULT_INTERVAL_SECONDS = 1.0
 AMBULANCIA_STEP_SECONDS = 1.1
 
 
-def cargar_intersecciones() -> Tuple[List[str], int, int]:
-    ruta = Path("src/config/system.json")
+def cargar_ciudad(ruta_config: str) -> Dict[str, Any]:
+    ruta = Path(ruta_config)
     if not ruta.exists():
-        return [], 0, 0
+        return {}
 
     with ruta.open("r", encoding="utf-8") as archivo:
         data = json.load(archivo)
 
-    intersecciones = data.get("ciudad", {}).get("intersecciones", [])
-    filas = int(data.get("ciudad", {}).get("filas", 0))
-    columnas = int(data.get("ciudad", {}).get("columnas", 0))
-    return intersecciones, filas, columnas
+    return data.get("ciudad", {})
 
 
 class ConsultorEstado:
@@ -125,9 +119,9 @@ def formatear_timestamp(valor: Any) -> str:
         return str(valor)
 
 
-def descomponer_interseccion(codigo: str) -> Tuple[str, int] | None:
+def posicion_interseccion(codigo: str, ciudad: Dict[str, Any]) -> Tuple[int, int] | None:
     try:
-        return descomponer_interseccion_cfg(codigo)
+        return posicion_en_ciudad(codigo, ciudad)
     except ValueError:
         return None
 
@@ -157,13 +151,13 @@ def calcular_dimensiones_grid(
     return max(1, filas), max(1, columnas)
 
 
-def ordenar_intersecciones_corredor(codigos: List[str]) -> List[str]:
+def ordenar_intersecciones_corredor(codigos: List[str], ciudad: Dict[str, Any]) -> List[str]:
     if len(codigos) <= 1:
         return list(codigos)
 
     try:
         descompuestas = [
-            (codigo, *descomponer_interseccion_cfg(codigo))
+            (codigo, *posicion_en_ciudad(codigo, ciudad))
             for codigo in codigos
         ]
     except ValueError:
@@ -174,16 +168,16 @@ def ordenar_intersecciones_corredor(codigos: List[str]) -> List[str]:
     if len(filas) == 1:
         descompuestas.sort(key=lambda item: item[2])
     elif len(columnas) == 1:
-        descompuestas.sort(key=lambda item: fila_a_indice(item[1]))
+        descompuestas.sort(key=lambda item: item[1])
     else:
-        descompuestas.sort(key=lambda item: (fila_a_indice(item[1]), item[2]))
+        descompuestas.sort(key=lambda item: (item[1], item[2]))
     return [codigo for codigo, _, _ in descompuestas]
 
 
 def construir_ruta_desde_origen(
-    corredor: List[str], origen: str | None, direccion: str | None
+    corredor: List[str], origen: str | None, direccion: str | None, ciudad: Dict[str, Any]
 ) -> List[str]:
-    ordenados = ordenar_intersecciones_corredor(corredor)
+    ordenados = ordenar_intersecciones_corredor(corredor, ciudad)
     if not origen or origen not in ordenados:
         return ordenados
     indice_origen = ordenados.index(origen)
@@ -213,21 +207,21 @@ def sumar_ambulancia_a_conteo(conteo_base: Any, amb_en_paso: bool) -> str:
 
 
 def calcular_intersecciones_cercanas(
-    interseccion_ambulancia: str | None, intersecciones: List[str]
+    interseccion_ambulancia: str | None, intersecciones: List[str], ciudad: Dict[str, Any]
 ) -> set[str]:
     if not interseccion_ambulancia:
         return set()
-    origen = descomponer_interseccion(interseccion_ambulancia)
+    origen = posicion_interseccion(interseccion_ambulancia, ciudad)
     if origen is None:
         return set()
     fila_origen, col_origen = origen
     cercanas: set[str] = set()
     for codigo in intersecciones:
-        destino = descomponer_interseccion(codigo)
+        destino = posicion_interseccion(codigo, ciudad)
         if destino is None:
             continue
         fila_destino, col_destino = destino
-        distancia_manhattan = abs(fila_a_indice(fila_destino) - fila_a_indice(fila_origen)) + abs(col_destino - col_origen)
+        distancia_manhattan = abs(fila_destino - fila_origen) + abs(col_destino - col_origen)
         if distancia_manhattan == 1:
             cercanas.add(codigo)
     return cercanas
@@ -383,7 +377,7 @@ def calcular_prioridad_restante(data: Dict[str, Any]) -> int | None:
 
 
 def _detectar_corredor_prioritario(
-    intersecciones: List[str], respuestas: Dict[str, Dict[str, Any]]
+    intersecciones: List[str], respuestas: Dict[str, Dict[str, Any]], ciudad: Dict[str, Any]
 ) -> List[str]:
     corredor: List[str] = []
     origen: str | None = None
@@ -401,7 +395,7 @@ def _detectar_corredor_prioritario(
         corredor.append(interseccion)
         if origen is None:
             origen, direccion = extraer_metadatos_ambulancia(str(data.get("regla_aplicada") or ""))
-    return construir_ruta_desde_origen(corredor, origen, direccion)
+    return construir_ruta_desde_origen(corredor, origen, direccion, ciudad)
 
 
 def construir_layout(
@@ -410,6 +404,7 @@ def construir_layout(
     filas: int,
     columnas: int,
     estado_ambulancia: EstadoAmbulanciaVisual,
+    ciudad: Dict[str, Any],
 ) -> Layout:
     layout = Layout(name="root")
     layout.split_column(
@@ -432,9 +427,9 @@ def construir_layout(
         interseccion: consultor.consultar_interseccion(interseccion)
         for interseccion in intersecciones
     }
-    corredor_activo = _detectar_corredor_prioritario(intersecciones, respuestas)
+    corredor_activo = _detectar_corredor_prioritario(intersecciones, respuestas, ciudad)
     interseccion_ambulancia = estado_ambulancia.actualizar(corredor_activo)
-    intersecciones_cercanas = calcular_intersecciones_cercanas(interseccion_ambulancia, intersecciones)
+    intersecciones_cercanas = calcular_intersecciones_cercanas(interseccion_ambulancia, intersecciones, ciudad)
 
     filas_layout = [Layout(name=f"row_{fila}") for fila in range(filas)]
     layout["grid"].split_column(*filas_layout)
@@ -480,12 +475,20 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_INTERVAL_SECONDS,
         help="Intervalo de refresco en segundos.",
     )
+    parser.add_argument(
+        "--config",
+        default="src/config/system_3x5.json",
+        help="Archivo de configuracion de ciudad.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    intersecciones_config, filas, columnas = cargar_intersecciones()
+    ciudad = cargar_ciudad(args.config)
+    intersecciones_config = ciudad.get("intersecciones", [])
+    filas = int(ciudad.get("filas", 0))
+    columnas = int(ciudad.get("columnas", 0))
     intersecciones = args.intersections or intersecciones_config
     if not intersecciones:
         raise SystemExit("No se encontraron intersecciones para monitorear.")
@@ -493,12 +496,12 @@ def main() -> None:
     consultor = ConsultorEstado()
     estado_ambulancia = EstadoAmbulanciaVisual()
     with Live(
-        construir_layout(intersecciones, consultor, filas, columnas, estado_ambulancia),
+        construir_layout(intersecciones, consultor, filas, columnas, estado_ambulancia, ciudad),
         refresh_per_second=4,
         screen=True,
     ) as live:
         while True:
-            live.update(construir_layout(intersecciones, consultor, filas, columnas, estado_ambulancia))
+            live.update(construir_layout(intersecciones, consultor, filas, columnas, estado_ambulancia, ciudad))
             time.sleep(args.interval)
 
 

@@ -5,21 +5,22 @@
     "columnas": 5,
     "intersecciones": [
       "INT-A1",
-      "INT-A2",
-      "INT-A3",
-      "INT-A4",
-      "INT-A5",
       "INT-B1",
-      "INT-B2",
-      "INT-B3",
-      "INT-B4",
-      "INT-B5",
       "INT-C1",
+      "INT-D1",
+      "INT-E1",
+      "INT-A2",
+      "INT-B2",
       "INT-C2",
+      "INT-D2",
+      "INT-E2",
+      "INT-A3",
+      "INT-B3",
       "INT-C3",
-      "INT-C4",
-      "INT-C5"
-    ]
+      "INT-D3",
+      "INT-E3"
+    ],
+    "orientacion": "COLUMNAS_LETRAS_FILAS_NUMERICAS"
   },
   "parametros_generales": {
     "intervalo_normal_segundos": 10,
@@ -36,56 +37,8 @@
       "duracion_verde_segundos": 15
     },
     {
-      "semaforo_id": "SEM-A2",
-      "interseccion": "INT-A2",
-      "estado_inicial": "ROJO",
-      "duracion_verde_segundos": 15
-    },
-    {
-      "semaforo_id": "SEM-A3",
-      "interseccion": "INT-A3",
-      "estado_inicial": "VERDE",
-      "duracion_verde_segundos": 15
-    },
-    {
-      "semaforo_id": "SEM-A4",
-      "interseccion": "INT-A4",
-      "estado_inicial": "ROJO",
-      "duracion_verde_segundos": 15
-    },
-    {
-      "semaforo_id": "SEM-A5",
-      "interseccion": "INT-A5",
-      "estado_inicial": "VERDE",
-      "duracion_verde_segundos": 15
-    },
-    {
       "semaforo_id": "SEM-B1",
       "interseccion": "INT-B1",
-      "estado_inicial": "ROJO",
-      "duracion_verde_segundos": 15
-    },
-    {
-      "semaforo_id": "SEM-B2",
-      "interseccion": "INT-B2",
-      "estado_inicial": "VERDE",
-      "duracion_verde_segundos": 15
-    },
-    {
-      "semaforo_id": "SEM-B3",
-      "interseccion": "INT-B3",
-      "estado_inicial": "ROJO",
-      "duracion_verde_segundos": 15
-    },
-    {
-      "semaforo_id": "SEM-B4",
-      "interseccion": "INT-B4",
-      "estado_inicial": "VERDE",
-      "duracion_verde_segundos": 15
-    },
-    {
-      "semaforo_id": "SEM-B5",
-      "interseccion": "INT-B5",
       "estado_inicial": "ROJO",
       "duracion_verde_segundos": 15
     },
@@ -96,8 +49,56 @@
       "duracion_verde_segundos": 15
     },
     {
+      "semaforo_id": "SEM-D1",
+      "interseccion": "INT-D1",
+      "estado_inicial": "ROJO",
+      "duracion_verde_segundos": 15
+    },
+    {
+      "semaforo_id": "SEM-E1",
+      "interseccion": "INT-E1",
+      "estado_inicial": "VERDE",
+      "duracion_verde_segundos": 15
+    },
+    {
+      "semaforo_id": "SEM-A2",
+      "interseccion": "INT-A2",
+      "estado_inicial": "ROJO",
+      "duracion_verde_segundos": 15
+    },
+    {
+      "semaforo_id": "SEM-B2",
+      "interseccion": "INT-B2",
+      "estado_inicial": "VERDE",
+      "duracion_verde_segundos": 15
+    },
+    {
       "semaforo_id": "SEM-C2",
       "interseccion": "INT-C2",
+      "estado_inicial": "ROJO",
+      "duracion_verde_segundos": 15
+    },
+    {
+      "semaforo_id": "SEM-D2",
+      "interseccion": "INT-D2",
+      "estado_inicial": "VERDE",
+      "duracion_verde_segundos": 15
+    },
+    {
+      "semaforo_id": "SEM-E2",
+      "interseccion": "INT-E2",
+      "estado_inicial": "ROJO",
+      "duracion_verde_segundos": 15
+    },
+    {
+      "semaforo_id": "SEM-A3",
+      "interseccion": "INT-A3",
+      "estado_inicial": "VERDE",
+      "duracion_verde_segundos": 15
+    },
+    {
+      "semaforo_id": "SEM-B3",
+      "interseccion": "INT-B3",
       "estado_inicial": "ROJO",
       "duracion_verde_segundos": 15
     },
@@ -108,14 +109,14 @@
       "duracion_verde_segundos": 15
     },
     {
-      "semaforo_id": "SEM-C4",
-      "interseccion": "INT-C4",
+      "semaforo_id": "SEM-D3",
+      "interseccion": "INT-D3",
       "estado_inicial": "ROJO",
       "duracion_verde_segundos": 15
     },
     {
-      "semaforo_id": "SEM-C5",
-      "interseccion": "INT-C5",
+      "semaforo_id": "SEM-E3",
+      "interseccion": "INT-E3",
       "estado_inicial": "VERDE",
       "duracion_verde_segundos": 15
     }
@@ -143,90 +144,6 @@
       "modo": "archivo_json"
     },
     {
-      "sensor_id": "CAM-A2",
-      "tipo_sensor": "camara",
-      "interseccion": "INT-A2",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "ESP-A2",
-      "tipo_sensor": "espira_inductiva",
-      "interseccion": "INT-A2",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "GPS-A2",
-      "tipo_sensor": "gps",
-      "interseccion": "INT-A2",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "CAM-A3",
-      "tipo_sensor": "camara",
-      "interseccion": "INT-A3",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "ESP-A3",
-      "tipo_sensor": "espira_inductiva",
-      "interseccion": "INT-A3",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "GPS-A3",
-      "tipo_sensor": "gps",
-      "interseccion": "INT-A3",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "CAM-A4",
-      "tipo_sensor": "camara",
-      "interseccion": "INT-A4",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "ESP-A4",
-      "tipo_sensor": "espira_inductiva",
-      "interseccion": "INT-A4",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "GPS-A4",
-      "tipo_sensor": "gps",
-      "interseccion": "INT-A4",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "CAM-A5",
-      "tipo_sensor": "camara",
-      "interseccion": "INT-A5",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "ESP-A5",
-      "tipo_sensor": "espira_inductiva",
-      "interseccion": "INT-A5",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "GPS-A5",
-      "tipo_sensor": "gps",
-      "interseccion": "INT-A5",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
       "sensor_id": "CAM-B1",
       "tipo_sensor": "camara",
       "interseccion": "INT-B1",
@@ -244,90 +161,6 @@
       "sensor_id": "GPS-B1",
       "tipo_sensor": "gps",
       "interseccion": "INT-B1",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "CAM-B2",
-      "tipo_sensor": "camara",
-      "interseccion": "INT-B2",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "ESP-B2",
-      "tipo_sensor": "espira_inductiva",
-      "interseccion": "INT-B2",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "GPS-B2",
-      "tipo_sensor": "gps",
-      "interseccion": "INT-B2",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "CAM-B3",
-      "tipo_sensor": "camara",
-      "interseccion": "INT-B3",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "ESP-B3",
-      "tipo_sensor": "espira_inductiva",
-      "interseccion": "INT-B3",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "GPS-B3",
-      "tipo_sensor": "gps",
-      "interseccion": "INT-B3",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "CAM-B4",
-      "tipo_sensor": "camara",
-      "interseccion": "INT-B4",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "ESP-B4",
-      "tipo_sensor": "espira_inductiva",
-      "interseccion": "INT-B4",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "GPS-B4",
-      "tipo_sensor": "gps",
-      "interseccion": "INT-B4",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "CAM-B5",
-      "tipo_sensor": "camara",
-      "interseccion": "INT-B5",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "ESP-B5",
-      "tipo_sensor": "espira_inductiva",
-      "interseccion": "INT-B5",
-      "intervalo_segundos": 2,
-      "modo": "archivo_json"
-    },
-    {
-      "sensor_id": "GPS-B5",
-      "tipo_sensor": "gps",
-      "interseccion": "INT-B5",
       "intervalo_segundos": 2,
       "modo": "archivo_json"
     },
@@ -353,6 +186,90 @@
       "modo": "archivo_json"
     },
     {
+      "sensor_id": "CAM-D1",
+      "tipo_sensor": "camara",
+      "interseccion": "INT-D1",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "ESP-D1",
+      "tipo_sensor": "espira_inductiva",
+      "interseccion": "INT-D1",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "GPS-D1",
+      "tipo_sensor": "gps",
+      "interseccion": "INT-D1",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "CAM-E1",
+      "tipo_sensor": "camara",
+      "interseccion": "INT-E1",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "ESP-E1",
+      "tipo_sensor": "espira_inductiva",
+      "interseccion": "INT-E1",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "GPS-E1",
+      "tipo_sensor": "gps",
+      "interseccion": "INT-E1",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "CAM-A2",
+      "tipo_sensor": "camara",
+      "interseccion": "INT-A2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "ESP-A2",
+      "tipo_sensor": "espira_inductiva",
+      "interseccion": "INT-A2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "GPS-A2",
+      "tipo_sensor": "gps",
+      "interseccion": "INT-A2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "CAM-B2",
+      "tipo_sensor": "camara",
+      "interseccion": "INT-B2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "ESP-B2",
+      "tipo_sensor": "espira_inductiva",
+      "interseccion": "INT-B2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "GPS-B2",
+      "tipo_sensor": "gps",
+      "interseccion": "INT-B2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
       "sensor_id": "CAM-C2",
       "tipo_sensor": "camara",
       "interseccion": "INT-C2",
@@ -370,6 +287,90 @@
       "sensor_id": "GPS-C2",
       "tipo_sensor": "gps",
       "interseccion": "INT-C2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "CAM-D2",
+      "tipo_sensor": "camara",
+      "interseccion": "INT-D2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "ESP-D2",
+      "tipo_sensor": "espira_inductiva",
+      "interseccion": "INT-D2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "GPS-D2",
+      "tipo_sensor": "gps",
+      "interseccion": "INT-D2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "CAM-E2",
+      "tipo_sensor": "camara",
+      "interseccion": "INT-E2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "ESP-E2",
+      "tipo_sensor": "espira_inductiva",
+      "interseccion": "INT-E2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "GPS-E2",
+      "tipo_sensor": "gps",
+      "interseccion": "INT-E2",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "CAM-A3",
+      "tipo_sensor": "camara",
+      "interseccion": "INT-A3",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "ESP-A3",
+      "tipo_sensor": "espira_inductiva",
+      "interseccion": "INT-A3",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "GPS-A3",
+      "tipo_sensor": "gps",
+      "interseccion": "INT-A3",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "CAM-B3",
+      "tipo_sensor": "camara",
+      "interseccion": "INT-B3",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "ESP-B3",
+      "tipo_sensor": "espira_inductiva",
+      "interseccion": "INT-B3",
+      "intervalo_segundos": 2,
+      "modo": "archivo_json"
+    },
+    {
+      "sensor_id": "GPS-B3",
+      "tipo_sensor": "gps",
+      "interseccion": "INT-B3",
       "intervalo_segundos": 2,
       "modo": "archivo_json"
     },
@@ -395,44 +396,44 @@
       "modo": "archivo_json"
     },
     {
-      "sensor_id": "CAM-C4",
+      "sensor_id": "CAM-D3",
       "tipo_sensor": "camara",
-      "interseccion": "INT-C4",
+      "interseccion": "INT-D3",
       "intervalo_segundos": 2,
       "modo": "archivo_json"
     },
     {
-      "sensor_id": "ESP-C4",
+      "sensor_id": "ESP-D3",
       "tipo_sensor": "espira_inductiva",
-      "interseccion": "INT-C4",
+      "interseccion": "INT-D3",
       "intervalo_segundos": 2,
       "modo": "archivo_json"
     },
     {
-      "sensor_id": "GPS-C4",
+      "sensor_id": "GPS-D3",
       "tipo_sensor": "gps",
-      "interseccion": "INT-C4",
+      "interseccion": "INT-D3",
       "intervalo_segundos": 2,
       "modo": "archivo_json"
     },
     {
-      "sensor_id": "CAM-C5",
+      "sensor_id": "CAM-E3",
       "tipo_sensor": "camara",
-      "interseccion": "INT-C5",
+      "interseccion": "INT-E3",
       "intervalo_segundos": 2,
       "modo": "archivo_json"
     },
     {
-      "sensor_id": "ESP-C5",
+      "sensor_id": "ESP-E3",
       "tipo_sensor": "espira_inductiva",
-      "interseccion": "INT-C5",
+      "interseccion": "INT-E3",
       "intervalo_segundos": 2,
       "modo": "archivo_json"
     },
     {
-      "sensor_id": "GPS-C5",
+      "sensor_id": "GPS-E3",
       "tipo_sensor": "gps",
-      "interseccion": "INT-C5",
+      "interseccion": "INT-E3",
       "intervalo_segundos": 2,
       "modo": "archivo_json"
     }
@@ -441,9 +442,19 @@
     {
       "via_id": "VIA-CENTRAL",
       "intersecciones": [
-        "INT-A3",
-        "INT-B3",
+        "INT-C1",
+        "INT-C2",
         "INT-C3"
+      ]
+    },
+    {
+      "via_id": "VIA-FILA-1",
+      "intersecciones": [
+        "INT-A1",
+        "INT-B1",
+        "INT-C1",
+        "INT-D1",
+        "INT-E1"
       ]
     },
     {

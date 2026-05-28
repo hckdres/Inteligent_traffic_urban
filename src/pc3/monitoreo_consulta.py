@@ -13,7 +13,11 @@ from rich.text import Text
 from rich import box
 from rich.markup import escape
 
-from src.utils.intersecciones import descomponer_interseccion, fila_a_indice
+from src.utils.intersecciones import (
+    etiqueta_columna,
+    etiqueta_fila,
+    posicion_en_ciudad,
+)
 from src.utils.timezones import COLOMBIA_TZ
 
 
@@ -164,19 +168,19 @@ class MonitoreoConsulta:
 
         filas = {}
         for codigo in intersecciones:
-            fila, columna = descomponer_interseccion(codigo)
+            fila, columna = posicion_en_ciudad(codigo, ciudad)
             filas.setdefault(fila, {})[columna] = codigo
 
         tabla = Table(title="Mapa del corredor priorizado", box=box.SIMPLE_HEAVY, expand=False)
         tabla.add_column("Fila", style="bold cyan", justify="center")
         total_columnas = int(ciudad.get("columnas", 0))
         for columna in range(1, total_columnas + 1):
-            tabla.add_column(str(columna), justify="center")
+            tabla.add_column(etiqueta_columna(columna, ciudad), justify="center")
 
         afectadas_set = set(afectadas)
         bloqueadas_set = set(bloqueadas)
-        for fila in sorted(filas, key=fila_a_indice):
-            celdas = [fila]
+        for fila in sorted(filas):
+            celdas = [etiqueta_fila(fila, ciudad)]
             for columna in range(1, total_columnas + 1):
                 codigo = filas.get(fila, {}).get(columna)
                 if not codigo:
