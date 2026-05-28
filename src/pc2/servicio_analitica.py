@@ -63,6 +63,8 @@ class ServicioAnalitica:
 
         self.push_control = self.context.socket(zmq.PUSH)
         self.push_control.bind(CONTROL_SEMAFOROS_ENDPOINT)
+        self.push_control.setsockopt(zmq.SNDTIMEO, 1000)
+        self.push_control.setsockopt(zmq.LINGER, 0)
 
         # Almacena últimos eventos tipados por intersección
         self._ultimo_cam: Dict[str, EventoCamara] = {}
@@ -300,7 +302,7 @@ class ServicioAnalitica:
         try:
             self.push_control.send_json(decision)
         except zmq.ZMQError as exc:
-            raise RuntimeError(f"No se pudo enviar decisión al control de semáforos: {exc}") from exc
+            print(f"[ANALITICA][WARN] No se pudo enviar decisión a control: {exc}")
 
     def _resolver_corredor_ambulancia(
         self, interseccion: str | None, modo_corredor: str, direccion: str
