@@ -12,6 +12,7 @@ import argparse
 import os
 import sys
 import threading
+import time
 from datetime import datetime
 
 # Permitir imports desde la raíz del proyecto
@@ -65,6 +66,9 @@ def main(pc2_ip: str, multihilo: bool) -> None:
 
     hilo_broker.start()
     print(f"[PC1] Broker {'multihilo' if multihilo else 'simple'} iniciado")
+
+    print("[PC1] Esperando estabilización de sockets ZMQ...")
+    time.sleep(2)
 
     publisher = ZMQPublisher(broker_endpoint_local)
     secuenciador = SecuenciadorEventos()
