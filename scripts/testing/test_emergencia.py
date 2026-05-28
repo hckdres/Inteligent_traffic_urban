@@ -64,7 +64,13 @@ def verificar_conectividad_tcp(endpoint: str, timeout_ms: int) -> None:
         print(f"[TEST] TCP FALLA -> {host}:{port} ({exc})")
 
 
-def probar_ambulancia(interseccion_codigo: str, pc2_ip: str, pc2_port: int, timeout_ms: int) -> None:
+def probar_ambulancia(
+    interseccion_codigo: str,
+    pc2_ip: str,
+    pc2_port: int,
+    timeout_ms: int,
+    experimento: str | None = None,
+) -> None:
     endpoint = resolver_endpoint_pc2(pc2_ip, pc2_port)
     verificar_conectividad_tcp(endpoint, min(timeout_ms, 1500))
     context = zmq.Context()
@@ -76,6 +82,8 @@ def probar_ambulancia(interseccion_codigo: str, pc2_ip: str, pc2_port: int, time
 
     ambulancia = Ambulancia(id_vehiculo="AMB-505", velocidad_actual=60.5, ubicacion_actual=interseccion_codigo, en_emergencia=True)
     
+    if experimento:
+        print(f"[METRICA_T1] exp={experimento} interseccion={interseccion_codigo}")
     print(f"[TEST] Iniciando protocolo de emergencia para ambulancia {ambulancia.id_vehiculo} en ruta hacia {interseccion_codigo}")
     
     payload = {
@@ -96,6 +104,8 @@ def probar_ambulancia(interseccion_codigo: str, pc2_ip: str, pc2_port: int, time
         respuesta = socket.recv_json()
         delta = time.perf_counter() - t_inicio
         print(f"[TEST] delta_seg={delta:.3f}")
+        if experimento:
+            print(f"[METRICA_T2] exp={experimento} interseccion={interseccion_codigo} delta_seg={delta:.3f}")
         print(f"[TEST] Respuesta recibida: {json.dumps(respuesta, indent=2)}")
         if respuesta.get("ok"):
             print("[TEST] ¡ÉXITO! Semáforos ajustados.")
@@ -112,10 +122,11 @@ def probar_ambulancia(interseccion_codigo: str, pc2_ip: str, pc2_port: int, time
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prueba manual de priorización de ambulancia")
     parser.add_argument("interseccion", nargs="?", default="INT-A1", help="Intersección objetivo, ej. INT-C3")
+    parser.add_argument("experimento", nargs="?", default=None, help="Nombre del experimento, ej. E1_base")
     parser.add_argument("--pc2-ip", default=None, help="IP de PC2 donde escucha la analítica")
     parser.add_argument("--pc2-port", type=int, default=None, help="Puerto de comando de analítica en PC2")
     parser.add_argument("--timeout-ms", type=int, default=5000, help="Tiempo de espera para respuesta")
     args = parser.parse_args()
 
-    probar_ambulancia(args.interseccion, args.pc2_ip, args.pc2_port, args.timeout_ms)
+    probar_ambulancia(args.interseccion, args.pc2_ip, args.pc2_port, args.timeout_ms, args.experimento)
 

@@ -13,11 +13,11 @@
 - `scripts/ops/windows/*.ps1`: atajos de Windows para reiniciar/abrir monitor
 
 ## 3) Pruebas puntuales
-- `scripts/testing/test_emergencia.py`: prueba manual de priorización de ambulancia
+- `scripts/testing/test_emergencia.py`: prueba manual de priorización de ambulancia y emite `delta_seg`
 
 ## 4) Métricas
 - `scripts/medir_metrica1.py`: conteo por ventana temporal en BD réplica y principal
-- `scripts/medir_metrica2.py`: latencia promedio de solicitudes de priorización de ambulancia
+- `scripts/medir_metrica2.py`: resumen de `delta_seg` desde los logs de emergencias
 
 ## 5) Estado actual de lanzamiento
 - Lanzamiento oficial por componentes en `scripts/pc1/`, `scripts/pc2/` y `scripts/pc3/`.

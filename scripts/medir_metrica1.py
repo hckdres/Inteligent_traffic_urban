@@ -52,7 +52,7 @@ def _contar_en_rango(db_path: Path, inicio_utc: datetime, fin_utc: datetime) -> 
     }
 
     with sqlite3.connect(db_path) as conn:
-        for (ts_evento,) in conn.execute("SELECT ts_evento FROM evento_sensor"):
+        for (ts_evento,) in conn.execute("SELECT recibido_en FROM evento_sensor"):
             ts = _parsear_timestamp_db(ts_evento)
             if ts and inicio_utc <= ts <= fin_utc:
                 conteos["evento_sensor"] += 1
@@ -86,6 +86,12 @@ def main() -> None:
     parser.add_argument("escenario", help="Nombre del escenario, por ejemplo E1_base")
     parser.add_argument("--replica-db", default=str(DEFAULT_REPLICA_DB), help="Ruta de la BD replica (PC2)")
     parser.add_argument("--primary-db", default=str(DEFAULT_PRIMARY_DB), help="Ruta de la BD principal (PC3)")
+    parser.add_argument(
+        "--solo",
+        choices=("ambos", "replica", "primary"),
+        default="ambos",
+        help="Limita la salida a una sola BD cuando se corre en una sola máquina",
+    )
     args = parser.parse_args()
 
     inicio_utc = _parsear_fecha_local(args.fecha_inicio)
@@ -93,19 +99,27 @@ def main() -> None:
     if fin_utc < inicio_utc:
         raise SystemExit("La fecha fin debe ser mayor o igual que la fecha inicio")
 
-    replica = _contar_en_rango(Path(args.replica_db), inicio_utc, fin_utc)
-    primary = _contar_en_rango(Path(args.primary_db), inicio_utc, fin_utc)
-
     print(f"=== MÉTRICA 1 — {args.escenario} ===")
     print(f"Ventana: {args.fecha_inicio}  ->  {args.fecha_fin}\n")
-    if replica is None:
-        print("BD Réplica (PC2):")
-        print("  estado          : no disponible en esta máquina")
-        print("  TOTAL           : N/A")
-    else:
-        _imprimir_bloque("BD Réplica (PC2)", replica)
-    print()
-    _imprimir_bloque("BD Principal (PC3)", primary)
+    if args.solo in ("ambos", "replica"):
+        replica = _contar_en_rango(Path(args.replica_db), inicio_utc, fin_utc)
+        if replica is None:
+            print("BD Réplica (PC2):")
+            print("  estado          : no disponible en esta máquina")
+            print("  TOTAL           : N/A")
+        else:
+            _imprimir_bloque("BD Réplica (PC2)", replica)
+        if args.solo == "ambos":
+            print()
+
+    if args.solo in ("ambos", "primary"):
+        primary = _contar_en_rango(Path(args.primary_db), inicio_utc, fin_utc)
+        if primary is None:
+            print("BD Principal (PC3):")
+            print("  estado          : no disponible en esta máquina")
+            print("  TOTAL           : N/A")
+        else:
+            _imprimir_bloque("BD Principal (PC3)", primary)
 
 
 if __name__ == "__main__":
