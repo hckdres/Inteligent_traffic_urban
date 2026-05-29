@@ -1,4 +1,4 @@
-$repoRoot = Split-Path -Parent $PSScriptRoot
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..\..")
 $pythonExe = Join-Path $repoRoot ".venv\Scripts\python.exe"
 
 if (-not (Test-Path $pythonExe)) {
@@ -35,7 +35,7 @@ $commonEnv = "`$env:PYTHONPATH='$repoRoot'; Set-Location '$repoRoot'"
 $cmdPc3 = "$commonEnv; & '$pythonExe' 'src/pc3/main_pc3.py'"
 $cmdPc2 = "$commonEnv; & '$pythonExe' 'src/pc2/main_pc2.py'"
 $cmdPc1 = "$commonEnv; & '$pythonExe' 'src/pc1/main_pc1.py'"
-$cmdMon = "$commonEnv; & '$pythonExe' 'scripts/monitor_grid.py'"
+$cmdMon = "$commonEnv; & '$pythonExe' 'scripts/ops/monitoring/monitor_grid.py'"
 
 Start-Process powershell -WindowStyle Hidden -ArgumentList @("-NoExit", "-Command", $cmdPc3)
 Start-Sleep -Seconds 2

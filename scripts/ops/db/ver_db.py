@@ -3,9 +3,9 @@ Visor interactivo de la BD SQLite del sistema de tráfico.
 Muestra tablas, conteos, últimos registros con paginación.
 
 Uso:
-    python scripts/ver_db.py                           # BD principal
-    python scripts/ver_db.py --db data/traffic_replica.db
-    python scripts/ver_db.py --limpiar --dias 1        # borrar datos > 1 día
+    python scripts/ops/db/ver_db.py                           # BD principal
+    python scripts/ops/db/ver_db.py --db data/traffic_replica.db
+    python scripts/ops/db/ver_db.py --limpiar --dias 1        # borrar datos > 1 día
 """
 from __future__ import annotations
 
@@ -16,7 +16,9 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from src.utils.timezones import COLOMBIA_TZ, UTC_TZ
 
@@ -350,7 +352,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     if args.limpiar:
-        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
         from src.persistence.repositorio_sqlite import RepositorioSQLite
         repo = RepositorioSQLite(args.db)
         n = repo.limpiar_datos_antiguos(args.dias)

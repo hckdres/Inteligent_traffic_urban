@@ -5,6 +5,7 @@ import threading
 from pathlib import Path
 
 from src.pc2.servicio_analitica import ServicioAnalitica
+from src.pc2.servicio_control_semaforos import ServicioControlSemaforos
 from src.pc2.servidor_bd_replica import ServidorBDReplica
 
 
@@ -22,6 +23,9 @@ def main() -> None:
 
     hilo_replica = threading.Thread(target=replica.iniciar, daemon=True)
     hilo_replica.start()
+
+    hilo_control = threading.Thread(target=ServicioControlSemaforos().ejecutar, daemon=True)
+    hilo_control.start()
 
     servicio = ServicioAnalitica()
     servicio.escuchar_eventos()

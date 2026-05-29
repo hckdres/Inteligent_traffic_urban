@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.utils.intersecciones import descomponer_interseccion
+
 
 _SCHEMA = Path(__file__).parent.parent.parent / "data" / "schema.sql"
 _MAX_ROWS_DISPLAY = 50   # límite para consultas de monitoreo
@@ -79,8 +81,7 @@ class RepositorioSQLite:
         with self._conn() as conn:
             # Intersecciones
             for codigo in config.get("ciudad", {}).get("intersecciones", []):
-                fila = codigo.split("-")[1][0]          # "INT-A1" -> "A"
-                columna = int(codigo.split("-")[1][1:]) # "INT-A1" -> 1
+                fila, columna = descomponer_interseccion(codigo)
                 conn.execute(
                     "INSERT OR IGNORE INTO interseccion (codigo, fila, columna) VALUES (?,?,?)",
                     (codigo, fila, columna),
@@ -247,7 +248,12 @@ class RepositorioSQLite:
     def guardar_decision(self, decision: Dict[str, Any]) -> None:
         with self._conn() as conn:
             contexto = decision.get("contexto", {})
-            intersecciones_objetivo = decision.get("intersecciones_afectadas") or [decision["interseccion"]]
+            intersecciones_verdes = decision.get("intersecciones_afectadas") or [decision["interseccion"]]
+            intersecciones_rojas = [
+                codigo
+                for codigo in (decision.get("intersecciones_bloqueadas") or [])
+                if codigo not in intersecciones_verdes
+            ]
 
             # Mapear clasificación al CHECK de la BD
             clasificacion_raw = decision.get("estado_circulacion", "NORMAL")
@@ -265,61 +271,34 @@ class RepositorioSQLite:
             origen_comando = "USUARIO" if origen_decision == "MANUAL" else "ANALITICA"
 
             accion = decision.get("accion", "")
-            tipo_cmd = self._accion_a_tipo_comando(accion)
-            for interseccion_codigo in intersecciones_objetivo:
-                inter_id = self._id_interseccion(conn, interseccion_codigo)
-                if not inter_id:
-                    continue
+            tipo_cmd_verde = self._accion_a_tipo_comando(accion)
+            tipo_cmd_rojo = "CAMBIAR_A_ROJO" if intersecciones_rojas else None
 
-                conn.execute(
-                    """INSERT INTO estado_trafico
-                       (interseccion_id, ts_estado, longitud_cola, conteo_vehicular,
-                        densidad_trafico, velocidad_promedio, clasificacion,
-                        regla_aplicada, origen)
-                       VALUES (?,?,?,?,?,?,?,?,?)""",
-                    (
-                        inter_id,
-                        contexto.get("timestamp", datetime.now(timezone.utc).isoformat()),
-                        contexto.get("cola"),
-                        contexto.get("vehiculos_contados"),
-                        contexto.get("densidad"),
-                        contexto.get("velocidad_promedio"),
-                        clasificacion,
-                        decision.get("regla_aplicada"),
-                        origen_estado,
-                    ),
+            for interseccion_codigo in intersecciones_verdes:
+                self._guardar_estado_interseccion(
+                    conn=conn,
+                    decision=decision,
+                    contexto=contexto,
+                    interseccion_codigo=interseccion_codigo,
+                    clasificacion=clasificacion,
+                    origen_estado=origen_estado,
+                    origen_comando=origen_comando,
+                    tipo_cmd=tipo_cmd_verde,
+                    sufijo_regla=None,
                 )
 
-                semaforo_id = self._id_semaforo_por_interseccion(conn, inter_id)
-                if tipo_cmd and semaforo_id:
-                    conn.execute(
-                        """INSERT INTO comando_semaforo
-                           (semaforo_id, interseccion_id, tipo_comando, valor_segundos,
-                            motivo, origen, estado_ejecucion, ejecutado_en)
-                           VALUES (?,?,?,?,?,?,?,?)""",
-                        (
-                            semaforo_id, inter_id, tipo_cmd,
-                            decision.get("duracion_verde_segundos"),
-                            decision.get("regla_aplicada"),
-                            origen_comando,
-                            "EJECUTADO",
-                            datetime.now(timezone.utc).isoformat(),
-                        ),
-                    )
-                    estado_actual = self._estado_semaforo_por_comando(tipo_cmd)
-                    if estado_actual:
-                        conn.execute(
-                            """UPDATE semaforo
-                               SET estado_actual = ?,
-                                   duracion_base_seg = COALESCE(?, duracion_base_seg),
-                                   updated_at = CURRENT_TIMESTAMP
-                               WHERE id = ?""",
-                            (
-                                estado_actual,
-                                decision.get("duracion_verde_segundos"),
-                                semaforo_id,
-                            ),
-                        )
+            for interseccion_codigo in intersecciones_rojas:
+                self._guardar_estado_interseccion(
+                    conn=conn,
+                    decision=decision,
+                    contexto=contexto,
+                    interseccion_codigo=interseccion_codigo,
+                    clasificacion=clasificacion,
+                    origen_estado=origen_estado,
+                    origen_comando=origen_comando,
+                    tipo_cmd=tipo_cmd_rojo,
+                    sufijo_regla="BLOQUEO_LATERAL",
+                )
 
             conn.commit()
 
@@ -376,7 +355,7 @@ class RepositorioSQLite:
         with self._conn() as conn:
             fila = conn.execute(
                 """SELECT i.codigo, et.ts_estado, et.clasificacion,
-                          et.regla_aplicada, et.longitud_cola,
+                          et.regla_aplicada, et.longitud_cola, et.conteo_vehicular,
                           et.velocidad_promedio, et.densidad_trafico,
                           s.estado_actual, s.duracion_base_seg,
                           (
@@ -537,3 +516,75 @@ class RepositorioSQLite:
             "SIN_ACCION":                   None,
         }
         return mapa.get(accion)
+
+    def _guardar_estado_interseccion(
+        self,
+        conn: sqlite3.Connection,
+        decision: Dict[str, Any],
+        contexto: Dict[str, Any],
+        interseccion_codigo: str,
+        clasificacion: str,
+        origen_estado: str,
+        origen_comando: str,
+        tipo_cmd: Optional[str],
+        sufijo_regla: Optional[str],
+    ) -> None:
+        inter_id = self._id_interseccion(conn, interseccion_codigo)
+        if not inter_id:
+            return
+
+        regla_aplicada = decision.get("regla_aplicada")
+        if sufijo_regla:
+            regla_aplicada = f"{regla_aplicada}|{sufijo_regla}"
+
+        conn.execute(
+            """INSERT INTO estado_trafico
+               (interseccion_id, ts_estado, longitud_cola, conteo_vehicular,
+                densidad_trafico, velocidad_promedio, clasificacion,
+                regla_aplicada, origen)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (
+                inter_id,
+                contexto.get("timestamp", datetime.now(timezone.utc).isoformat()),
+                contexto.get("cola"),
+                contexto.get("vehiculos_contados"),
+                contexto.get("densidad"),
+                contexto.get("velocidad_promedio"),
+                clasificacion,
+                regla_aplicada,
+                origen_estado,
+            ),
+        )
+
+        semaforo_id = self._id_semaforo_por_interseccion(conn, inter_id)
+        if tipo_cmd and semaforo_id:
+            conn.execute(
+                """INSERT INTO comando_semaforo
+                   (semaforo_id, interseccion_id, tipo_comando, valor_segundos,
+                    motivo, origen, estado_ejecucion, ejecutado_en)
+                   VALUES (?,?,?,?,?,?,?,?)""",
+                (
+                    semaforo_id,
+                    inter_id,
+                    tipo_cmd,
+                    decision.get("duracion_verde_segundos"),
+                    regla_aplicada,
+                    origen_comando,
+                    "EJECUTADO",
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+            estado_actual = self._estado_semaforo_por_comando(tipo_cmd)
+            if estado_actual:
+                conn.execute(
+                    """UPDATE semaforo
+                       SET estado_actual = ?,
+                           duracion_base_seg = COALESCE(?, duracion_base_seg),
+                           updated_at = CURRENT_TIMESTAMP
+                       WHERE id = ?""",
+                    (
+                        estado_actual,
+                        decision.get("duracion_verde_segundos"),
+                        semaforo_id,
+                    ),
+                )

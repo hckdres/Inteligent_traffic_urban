@@ -11,7 +11,9 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 from rich import box
+from rich.markup import escape
 
+from src.utils.intersecciones import descomponer_interseccion, fila_a_indice
 from src.utils.timezones import COLOMBIA_TZ
 
 
@@ -23,7 +25,8 @@ ANALITICA_COMMAND_ENDPOINT = "tcp://127.0.0.1:5562"
 class MonitoreoConsulta:
     def __init__(self) -> None:
         self.context = zmq.Context.instance()
-        self.timeout_ms = 700
+        self.timeout_ms = 1200
+        self.command_timeout_ms = 4000
         self.console = Console()
         self.ciudad = self._cargar_ciudad()
         self._primaria_disponible = True
@@ -53,14 +56,16 @@ class MonitoreoConsulta:
             elif opcion == "3":
                 inter = self.console.input("Intersección a priorizar: ").strip()
                 modo_corredor = self.console.input("Corredor ([bold]FILA[/bold]/[bold]COLUMNA[/bold]): ").strip().upper()
+                direccion = self.console.input("Dirección ([bold]ADELANTE[/bold]/[bold]ATRAS[/bold], default ADELANTE): ").strip().upper() or "ADELANTE"
                 detalle = self.console.input("Detalle (ej. Ambulancia en camino): ").strip()
                 res = self.enviar_indicacion({
                     "tipo": "priorizar_via",
                     "interseccion": inter,
                     "modo_corredor": modo_corredor,
+                    "direccion": direccion,
                     "detalle": detalle,
                     "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                    "duracion_verde_segundos": 20,
+                    "duracion_verde_segundos": 10,
                 })
                 self._mostrar_resultado_priorizacion(res)
             elif opcion == "4":
@@ -74,7 +79,7 @@ class MonitoreoConsulta:
                     "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                     "duracion_verde_segundos": 15,
                 })
-                self.console.print(f"[bold green]Resultado:[/bold green] {res}")
+                self.console.print(f"[bold green]Resultado:[/bold green] {escape(str(res))}")
             elif opcion == "5":
                 seq = self.console.input("Seq dato (ej. [bold]1[/bold]): ").strip()
                 res = self.consultar_evento_seq(seq)
@@ -93,27 +98,29 @@ class MonitoreoConsulta:
         fuente = res.get("fuente", "UNKNOWN")
         color_fuente = "green" if fuente == "PRIMARY" else "yellow"
         
-        table = Table(title=f"Estado Intersección {data['codigo']}", box=box.ROUNDED)
+        table = Table(title=f"Estado Intersección {escape(str(data['codigo']))}", box=box.ROUNDED)
         table.add_column("Propiedad", style="cyan")
         table.add_column("Valor", style="white")
         
-        table.add_row("Fuente de Datos", f"[{color_fuente}]{fuente}[/{color_fuente}]")
-        table.add_row("Timestamp", self._formatear_ts(data.get("ts_estado")))
+        table.add_row("Fuente de Datos", Text(str(fuente), style=f"bold {color_fuente}"))
+        table.add_row("Timestamp", escape(self._formatear_ts(data.get("ts_estado"))))
         
         estado = str(data.get("clasificacion"))
         color_estado = "green" if estado == "NORMAL" else "red" if "CONGESTION" in estado else "blue"
-        table.add_row("Estado Circulación", f"[{color_estado}]{estado}[/{color_estado}]")
+        table.add_row("Estado Circulación", Text(estado, style=f"bold {color_estado}"))
         
-        table.add_row("Regla Aplicada", str(data.get("regla_aplicada")))
-        table.add_row("Longitud Cola", str(data.get("longitud_cola")))
-        table.add_row("Velocidad Promedio", str(data.get("velocidad_promedio")))
-        table.add_row("Densidad", str(data.get("densidad_trafico")))
-        table.add_row("Estado Semáforo", f"[bold]{data.get('estado_actual')}[/bold]")
-        table.add_row("Último Comando", str(data.get("ultimo_comando") or "SIN_COMANDO"))
-        table.add_row("Duración Programada", f"{data.get('duracion_base_seg')}s")
+        table.add_row("Regla Aplicada", escape(str(data.get("regla_aplicada"))))
+        table.add_row("Longitud Cola", escape(str(data.get("longitud_cola"))))
+        table.add_row("Velocidad Promedio", escape(str(data.get("velocidad_promedio"))))
+        table.add_row("Densidad", escape(str(data.get("densidad_trafico"))))
+        estado_semaforo = str(data.get("estado_actual") or "DESCONOCIDO")
+        color_semaforo = "green" if estado_semaforo == "VERDE" else "red" if estado_semaforo == "ROJO" else "yellow"
+        table.add_row("Estado Semáforo", Text(estado_semaforo, style=f"bold {color_semaforo}"))
+        table.add_row("Último Comando", escape(str(data.get("ultimo_comando") or "SIN_COMANDO")))
+        table.add_row("Duración Programada", escape(f"{data.get('duracion_base_seg')}s"))
         restante = self._prioridad_restante(data)
         if restante is not None:
-            table.add_row("Prioridad Restante", f"[bold yellow]{restante}s[/bold yellow]")
+            table.add_row("Prioridad Restante", Text(f"{restante}s", style="bold yellow"))
         
         self.console.print(table)
 
@@ -124,7 +131,9 @@ class MonitoreoConsulta:
 
         decision = res.get("decision", {})
         corredor = decision.get("contexto", {}).get("modo_corredor", "N/A")
+        direccion = decision.get("contexto", {}).get("direccion", "N/A")
         afectadas = decision.get("intersecciones_afectadas", [])
+        bloqueadas = decision.get("intersecciones_bloqueadas", [])
         interseccion = decision.get("interseccion", "N/A")
         duracion = decision.get("duracion_verde_segundos", "N/A")
         detalle = decision.get("contexto", {}).get("detalle") or "Sin detalle"
@@ -132,19 +141,21 @@ class MonitoreoConsulta:
         resumen = Table(box=box.ROUNDED, expand=False)
         resumen.add_column("Campo", style="cyan")
         resumen.add_column("Valor", style="white")
-        resumen.add_row("Intersección origen", f"[bold yellow]{interseccion}[/bold yellow]")
-        resumen.add_row("Corredor", f"[bold green]{corredor}[/bold green]")
-        resumen.add_row("Duración", f"[bold]{duracion}s[/bold]")
-        resumen.add_row("Detalle", detalle)
-        resumen.add_row("Intersecciones liberadas", ", ".join(afectadas) if afectadas else "Ninguna")
+        resumen.add_row("Intersección origen", Text(str(interseccion), style="bold yellow"))
+        resumen.add_row("Corredor", Text(str(corredor), style="bold green"))
+        resumen.add_row("Dirección", Text(str(direccion), style="bold cyan"))
+        resumen.add_row("Duración", Text(f"{duracion}s", style="bold"))
+        resumen.add_row("Detalle", escape(str(detalle)))
+        resumen.add_row("Intersecciones liberadas", escape(", ".join(afectadas) if afectadas else "Ninguna"))
+        resumen.add_row("Intersecciones bloqueadas", escape(", ".join(bloqueadas) if bloqueadas else "Ninguna"))
 
         self.console.print(Panel(resumen, title="[bold green]Prioridad de Ambulancia Activada[/bold green]", border_style="green"))
 
-        mapa = self._render_mapa_corredor(interseccion, afectadas)
+        mapa = self._render_mapa_corredor(interseccion, afectadas, bloqueadas)
         if mapa is not None:
             self.console.print(mapa)
 
-    def _render_mapa_corredor(self, origen: str, afectadas: list[str]) -> Panel | None:
+    def _render_mapa_corredor(self, origen: str, afectadas: list[str], bloqueadas: list[str]) -> Panel | None:
         ciudad = self.ciudad
         intersecciones = ciudad.get("intersecciones", [])
         if not intersecciones:
@@ -152,9 +163,7 @@ class MonitoreoConsulta:
 
         filas = {}
         for codigo in intersecciones:
-            sufijo = codigo.split("-", 1)[1]
-            fila = sufijo[0]
-            columna = int(sufijo[1:])
+            fila, columna = descomponer_interseccion(codigo)
             filas.setdefault(fila, {})[columna] = codigo
 
         tabla = Table(title="Mapa del corredor priorizado", box=box.SIMPLE_HEAVY, expand=False)
@@ -164,7 +173,8 @@ class MonitoreoConsulta:
             tabla.add_column(str(columna), justify="center")
 
         afectadas_set = set(afectadas)
-        for fila in sorted(filas):
+        bloqueadas_set = set(bloqueadas)
+        for fila in sorted(filas, key=fila_a_indice):
             celdas = [fila]
             for columna in range(1, total_columnas + 1):
                 codigo = filas.get(fila, {}).get(columna)
@@ -174,15 +184,17 @@ class MonitoreoConsulta:
 
                 etiqueta = codigo.split("-", 1)[1]
                 if codigo == origen:
-                    celda = f"[bold black on bright_yellow]{etiqueta} AMB[/bold black on bright_yellow]"
+                    celda = Text(f"{etiqueta} AMB", style="bold black on bright_yellow")
                 elif codigo in afectadas_set:
-                    celda = f"[bold black on green]{etiqueta} PASO[/bold black on green]"
+                    celda = Text(f"{etiqueta} PASO", style="bold black on green")
+                elif codigo in bloqueadas_set:
+                    celda = Text(f"{etiqueta} BLOQ", style="bold white on red")
                 else:
-                    celda = f"[white on rgb(60,60,60)]{etiqueta} NORMAL[/white on rgb(60,60,60)]"
+                    celda = Text(f"{etiqueta} NORMAL", style="white on rgb(60,60,60)")
                 celdas.append(celda)
             tabla.add_row(*celdas)
 
-        nota = Text("AMB = punto de referencia de la ambulancia | PASO = corredor con prioridad", style="dim")
+        nota = Text("AMB = punto de referencia de la ambulancia | PASO = corredor con prioridad | BLOQ = semáforo en rojo", style="dim")
         tabla.caption = nota
         return Panel(tabla, border_style="bright_green")
 
@@ -199,12 +211,12 @@ class MonitoreoConsulta:
 
     def _mostrar_resultado_evento_seq(self, res: Dict[str, Any], seq: str) -> None:
         if not res.get("ok") or not res.get("data"):
-            self.console.print(f"[bold red]No se encontraron datos para seq={seq}.[/bold red]")
+            self.console.print(f"[bold red]No se encontraron datos para seq={escape(str(seq))}.[/bold red]")
             return
 
         fuente = res.get("fuente", "UNKNOWN")
         color_fuente = "green" if fuente == "PRIMARY" else "yellow"
-        table = Table(title=f"Dato seq={seq} ({fuente})", box=box.ROUNDED)
+        table = Table(title=f"Dato seq={escape(str(seq))} ({escape(str(fuente))})", box=box.ROUNDED)
         table.add_column("Seq", style="cyan", justify="right")
         table.add_column("Sensor", style="white")
         table.add_column("Intersección", style="cyan")
@@ -215,15 +227,15 @@ class MonitoreoConsulta:
 
         for fila in res["data"]:
             table.add_row(
-                str(fila.get("seq")),
-                str(fila.get("sensor")),
-                str(fila.get("interseccion")),
-                str(fila.get("tipo_evento") or "SIN_EVENTOS"),
-                self._formatear_ts(fila.get("ts_evento")),
-                str(fila.get("valor_principal")),
-                str(fila.get("velocidad")),
+                escape(str(fila.get("seq"))),
+                escape(str(fila.get("sensor"))),
+                escape(str(fila.get("interseccion"))),
+                escape(str(fila.get("tipo_evento") or "SIN_EVENTOS")),
+                escape(self._formatear_ts(fila.get("ts_evento"))),
+                escape(str(fila.get("valor_principal"))),
+                escape(str(fila.get("velocidad"))),
             )
-        table.caption = f"[{color_fuente}]Fuente de datos: {fuente}[/{color_fuente}]"
+        table.caption = f"[{color_fuente}]Fuente de datos: {escape(str(fuente))}[/{color_fuente}]"
         self.console.print(table)
 
     def _mostrar_resultado_historico(self, res: Dict[str, Any]) -> None:
@@ -242,11 +254,11 @@ class MonitoreoConsulta:
             estado = str(fila.get("clasificacion"))
             color = "green" if estado == "NORMAL" else "red" if "CONGESTION" in estado else "blue"
             table.add_row(
-                str(fila.get("interseccion")),
-                self._formatear_ts(fila.get("ts_estado")),
-                f"[{color}]{estado}[/{color}]",
-                str(fila.get("regla_aplicada")),
-                str(fila.get("origen"))
+                escape(str(fila.get("interseccion"))),
+                escape(self._formatear_ts(fila.get("ts_estado"))),
+                f"[{color}]{escape(estado)}[/{color}]",
+                escape(str(fila.get("regla_aplicada"))),
+                escape(str(fila.get("origen")))
             )
         
         self.console.print(table)
@@ -277,8 +289,8 @@ class MonitoreoConsulta:
     def enviar_indicacion(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         socket = self.context.socket(zmq.REQ)
         socket.connect(ANALITICA_COMMAND_ENDPOINT)
-        socket.setsockopt(zmq.RCVTIMEO, self.timeout_ms)
-        socket.setsockopt(zmq.SNDTIMEO, self.timeout_ms)
+        socket.setsockopt(zmq.RCVTIMEO, self.command_timeout_ms)
+        socket.setsockopt(zmq.SNDTIMEO, self.command_timeout_ms)
         try:
             socket.send_json(payload)
             return socket.recv_json()
