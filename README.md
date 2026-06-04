@@ -1076,9 +1076,3 @@ Performance scenario example:
 ```bash
 python scripts/run_pc1.py --pc2-ip <PC2_IP_OR_127.0.0.1> --config src/config/system_escenario2.json --multihilo
 ```
-
----
-
-## 29. Source Basis
-
-This documentation was prepared from the submitted source code, the corrected design report, the final test report, and the original project specification. The document intentionally avoids personal names and keeps the focus on the system architecture, execution model, and validation process.
